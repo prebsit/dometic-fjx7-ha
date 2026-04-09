@@ -22,7 +22,7 @@ from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
-RECONNECT_DELAY = 10  # seconds before reconnect attempt
+RECONNECT_DELAY = 30  # seconds before reconnect attempt (FJX7 rejects rapid retries)
 
 
 class FJX7Coordinator(DataUpdateCoordinator[FJX7State]):
