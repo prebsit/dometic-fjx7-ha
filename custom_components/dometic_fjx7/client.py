@@ -129,8 +129,8 @@ class FJX7BLEClient:
 
         client = None
         try:
-            _LOGGER.debug("FJX7: creating BleakClient")
-            client = BleakClient(address, timeout=15.0, adapter="hci0")
+            _LOGGER.debug("FJX7: creating BleakClient with BLEDevice")
+            client = BleakClient(self._ble_device, timeout=15.0)
 
             _LOGGER.debug("FJX7: calling connect()")
             await client.connect()
@@ -141,8 +141,9 @@ class FJX7BLEClient:
             await client.start_notify(NOTIFY_UUID, on_notify)
 
             _LOGGER.debug("FJX7: subscribing to params")
-            for param in SUBSCRIBE_PARAMS:
+            for i, param in enumerate(SUBSCRIBE_PARAMS):
                 cmd = encode_subscribe(param)
+                _LOGGER.debug("FJX7: writing subscribe %d/%d param=0x%02x", i+1, len(SUBSCRIBE_PARAMS), param)
                 await client.write_gatt_char(WRITE_UUID, cmd, response=True)
                 await asyncio.sleep(0.15)
 
@@ -170,12 +171,13 @@ class FJX7BLEClient:
             )
             return len(notifications) > 0
 
-        except (BleakError, TimeoutError, asyncio.TimeoutError, OSError) as err:
+        except Exception as err:
             self._connected = False
             _LOGGER.warning("FJX7: poll failed: %s: %s", type(err).__name__, err)
-            if client and client.is_connected:
+            if client:
                 try:
-                    await client.disconnect()
+                    if client.is_connected:
+                        await client.disconnect()
                 except Exception:
                     pass
             return False
@@ -197,7 +199,7 @@ class FJX7BLEClient:
 
         client = None
         try:
-            client = BleakClient(address, timeout=15.0, adapter="hci0")
+            client = BleakClient(self._ble_device, timeout=15.0)
             await client.connect()
             self._connected = True
 
@@ -220,12 +222,13 @@ class FJX7BLEClient:
             _LOGGER.info("FJX7: command complete, %d echoes", len(echo_data))
             return True
 
-        except (BleakError, TimeoutError, asyncio.TimeoutError, OSError) as err:
+        except Exception as err:
             self._connected = False
             _LOGGER.warning("FJX7: command failed: %s: %s", type(err).__name__, err)
-            if client and client.is_connected:
+            if client:
                 try:
-                    await client.disconnect()
+                    if client.is_connected:
+                        await client.disconnect()
                 except Exception:
                     pass
             return False
