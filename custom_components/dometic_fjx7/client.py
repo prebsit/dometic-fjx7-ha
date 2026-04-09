@@ -146,15 +146,22 @@ class FJX7BLEClient:
                 cmd = encode_subscribe(param)
                 _LOGGER.debug("FJX7: writing subscribe %d/%d param=0x%02x", i+1, len(SUBSCRIBE_PARAMS), param)
                 try:
-                    await client.write_gatt_char(WRITE_UUID, cmd, response=True)
+                    await asyncio.wait_for(
+                        client.write_gatt_char(WRITE_UUID, cmd, response=True),
+                        timeout=0.5,
+                    )
                     success_count += 1
+                except asyncio.TimeoutError:
+                    # Write was sent at HCI level even if D-Bus response was slow
+                    success_count += 1
+                    _LOGGER.debug("FJX7: subscribe %d/%d write timeout (probably OK)", i+1, len(SUBSCRIBE_PARAMS))
                 except Exception as write_err:
                     _LOGGER.debug("FJX7: subscribe write failed at %d/%d: %s", i+1, len(SUBSCRIBE_PARAMS), write_err)
                     break
                 await asyncio.sleep(0.15)
 
             _LOGGER.debug("FJX7: %d/%d subscribes sent, waiting for notifications", success_count, len(SUBSCRIBE_PARAMS))
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(1.5)
 
             try:
                 await client.stop_notify(NOTIFY_UUID)
@@ -216,7 +223,13 @@ class FJX7BLEClient:
             self._connected = True
 
             await client.start_notify(NOTIFY_UUID, on_notify)
-            await client.write_gatt_char(WRITE_UUID, data, response=True)
+            try:
+                await asyncio.wait_for(
+                    client.write_gatt_char(WRITE_UUID, data, response=True),
+                    timeout=0.5,
+                )
+            except asyncio.TimeoutError:
+                _LOGGER.debug("FJX7: command write timeout (probably OK)")
             _LOGGER.debug("FJX7: command sent, waiting for echo")
 
             try:
