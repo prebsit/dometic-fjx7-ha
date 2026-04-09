@@ -1,8 +1,8 @@
 """BLE client for Dometic FJX7.
 
-Manages the BLE connection, notification subscriptions, and state.
-Uses HA's BleakClientWrapper for transport abstraction (works with
-local BLE adapter or ESPHome bluetooth_proxy transparently).
+Manages BLE connection, notification subscriptions, and state.
+Uses a connect-operate-disconnect pattern for reliability on
+Pi 3B+ bcm43438 (known BLE stability issues with persistent connections).
 """
 
 from __future__ import annotations
@@ -13,7 +13,6 @@ from typing import Callable
 
 from bleak import BleakClient, BleakError
 from bleak.backends.device import BLEDevice
-from bleak_retry_connector import establish_connection
 
 from .const import (
     GRP_CLIMATE,
@@ -40,8 +39,6 @@ from .ddm import (
 )
 
 _LOGGER = logging.getLogger(__name__)
-
-WRITE_PACING = 0.15  # seconds between BLE writes (matches Dometic app)
 
 
 class FJX7State:
@@ -95,7 +92,12 @@ class FJX7State:
 
 
 class FJX7BLEClient:
-    """Manages BLE connection and communication with a Dometic FJX7."""
+    """Manages BLE communication with a Dometic FJX7.
+
+    Uses a connect-subscribe-collect-disconnect pattern rather than
+    holding a persistent connection. The Pi 3B+ bcm43438 has known
+    BLE stability issues with long-lived connections.
+    """
 
     def __init__(
         self,
@@ -103,102 +105,135 @@ class FJX7BLEClient:
         state_callback: Callable[[], None] | None = None,
     ) -> None:
         self._ble_device = ble_device
-        self._client: BleakClient | None = None
         self._state_callback = state_callback
-        self._disconnect_event = asyncio.Event()
         self.state = FJX7State()
+        self._connected = False
 
     @property
     def is_connected(self) -> bool:
-        return self._client is not None and self._client.is_connected
+        return self._connected
 
     def set_ble_device(self, ble_device: BLEDevice) -> None:
         """Update the BLE device reference (e.g. after rediscovery)."""
         self._ble_device = ble_device
 
+    async def async_poll_state(self) -> bool:
+        """Connect, subscribe, collect state, disconnect. Returns True on success."""
+        address = self._ble_device.address
+        _LOGGER.debug("FJX7: polling state from %s (%s)", self._ble_device.name, address)
+
+        notifications: list[bytearray] = []
+
+        def on_notify(_sender: int, data: bytearray) -> None:
+            notifications.append(data)
+
+        try:
+            async with BleakClient(
+                self._ble_device,
+                timeout=20.0,
+            ) as client:
+                self._connected = True
+                _LOGGER.debug("FJX7: connected, subscribing")
+
+                await client.start_notify(NOTIFY_UUID, on_notify)
+
+                for param in SUBSCRIBE_PARAMS:
+                    cmd = encode_subscribe(param)
+                    await client.write_gatt_char(WRITE_UUID, cmd, response=True)
+                    await asyncio.sleep(0.15)
+
+                # Wait for notifications to arrive
+                await asyncio.sleep(1.0)
+
+                await client.stop_notify(NOTIFY_UUID)
+
+            # Process all collected notifications after disconnect
+            self._connected = False
+            changed = False
+            for data in notifications:
+                report = decode_report(data)
+                if report and report.is_climate:
+                    if self.state.update_from_report(report):
+                        changed = True
+
+            if changed and self._state_callback:
+                self._state_callback()
+
+            _LOGGER.info(
+                "FJX7: poll complete, got %d notifications, state changed: %s",
+                len(notifications), changed,
+            )
+            return len(notifications) > 0
+
+        except (BleakError, TimeoutError, asyncio.TimeoutError) as err:
+            self._connected = False
+            _LOGGER.warning("FJX7: poll failed: %s", err)
+            return False
+
+    async def async_send_command(self, data: bytes) -> bool:
+        """Connect, send a single command, wait for echo, disconnect."""
+        _LOGGER.debug("FJX7: sending command %s", data.hex())
+
+        echo_received = asyncio.Event()
+        echo_data: list[bytearray] = []
+
+        def on_notify(_sender: int, ndata: bytearray) -> None:
+            echo_data.append(ndata)
+            report = decode_report(ndata)
+            if report and report.is_climate:
+                self.state.update_from_report(report)
+                echo_received.set()
+
+        try:
+            async with BleakClient(
+                self._ble_device,
+                timeout=20.0,
+            ) as client:
+                self._connected = True
+                await client.start_notify(NOTIFY_UUID, on_notify)
+
+                await client.write_gatt_char(WRITE_UUID, data, response=True)
+                _LOGGER.debug("FJX7: command sent, waiting for echo")
+
+                try:
+                    await asyncio.wait_for(echo_received.wait(), timeout=3.0)
+                except asyncio.TimeoutError:
+                    _LOGGER.debug("FJX7: no echo within 3s")
+
+                await client.stop_notify(NOTIFY_UUID)
+
+            self._connected = False
+
+            if self._state_callback and echo_data:
+                self._state_callback()
+
+            _LOGGER.info("FJX7: command complete, %d echoes", len(echo_data))
+            return True
+
+        except (BleakError, TimeoutError, asyncio.TimeoutError) as err:
+            self._connected = False
+            _LOGGER.warning("FJX7: command failed: %s", err)
+            return False
+
+    async def async_set_temperature(self, celsius: float) -> bool:
+        return await self.async_send_command(encode_set_temperature(celsius))
+
+    async def async_set_ac_mode(self, mode: int) -> bool:
+        return await self.async_send_command(encode_set(PARAM_AC_MODE, mode))
+
+    async def async_set_fan_speed(self, speed: int) -> bool:
+        return await self.async_send_command(encode_set(PARAM_FAN_SPEED, speed))
+
+    async def async_set_power(self, on: bool) -> bool:
+        return await self.async_send_command(encode_set(PARAM_POWER, 1 if on else 0))
+
+    async def async_set_light(self, param_id: int, on: bool) -> bool:
+        return await self.async_send_command(encode_set(param_id, 1 if on else 0))
+
     async def connect(self) -> None:
-        """Connect to the FJX7 and subscribe to climate notifications."""
-        _LOGGER.debug("Connecting to %s", self._ble_device.name)
-
-        self._client = await establish_connection(
-            BleakClient,
-            self._ble_device,
-            self._ble_device.name or "FJX7",
-            disconnected_callback=self._on_disconnect,
-            max_attempts=1,
-            ble_device_callback=lambda: self._ble_device,
-        )
-
-        _LOGGER.debug("Connected, enabling notifications immediately")
-        await self._client.start_notify(NOTIFY_UUID, self._on_notification)
-
-        _LOGGER.debug("Subscribing to %d climate params", len(SUBSCRIBE_PARAMS))
-        for param in SUBSCRIBE_PARAMS:
-            if not self.is_connected:
-                _LOGGER.warning("FJX7: lost connection during subscribe")
-                return
-            cmd = encode_subscribe(param)
-            try:
-                await self._client.write_gatt_char(WRITE_UUID, cmd, response=True)
-            except Exception as err:
-                _LOGGER.warning("FJX7: subscribe param 0x%02x failed: %s", param, err)
-                return
-            await asyncio.sleep(0.2)
-
-        _LOGGER.info(
-            "FJX7 %s: connected and subscribed", self._ble_device.name
-        )
+        """Initial state poll on startup."""
+        await self.async_poll_state()
 
     async def disconnect(self) -> None:
-        """Disconnect from the device."""
-        if self._client and self._client.is_connected:
-            try:
-                await self._client.stop_notify(NOTIFY_UUID)
-            except BleakError:
-                pass
-            await self._client.disconnect()
-        self._client = None
-
-    async def async_set_temperature(self, celsius: float) -> None:
-        """Set target temperature."""
-        await self._write(encode_set_temperature(celsius))
-
-    async def async_set_ac_mode(self, mode: int) -> None:
-        """Set AC operating mode."""
-        await self._write(encode_set(PARAM_AC_MODE, mode))
-
-    async def async_set_fan_speed(self, speed: int) -> None:
-        """Set fan speed."""
-        await self._write(encode_set(PARAM_FAN_SPEED, speed))
-
-    async def async_set_power(self, on: bool) -> None:
-        """Turn power on or off."""
-        await self._write(encode_set(PARAM_POWER, 1 if on else 0))
-
-    async def async_set_light(self, param_id: int, on: bool) -> None:
-        """Set interior or exterior light."""
-        await self._write(encode_set(param_id, 1 if on else 0))
-
-    async def _write(self, data: bytes) -> None:
-        """Write a command to the device."""
-        if not self.is_connected:
-            raise BleakError("Not connected to FJX7")
-        _LOGGER.debug("BLE write: %s", data.hex())
-        await self._client.write_gatt_char(WRITE_UUID, data, response=True)
-
-    def _on_notification(self, _sender: int, data: bytearray) -> None:
-        """Handle incoming BLE notification."""
-        report = decode_report(data)
-        if report is None:
-            _LOGGER.debug("Undecodable frame: %s", data.hex())
-            return
-
-        changed = self.state.update_from_report(report)
-        if changed and self._state_callback:
-            self._state_callback()
-
-    def _on_disconnect(self, _client: BleakClient) -> None:
-        """Handle unexpected disconnection."""
-        _LOGGER.warning("FJX7 %s: disconnected", self._ble_device.name)
-        self._disconnect_event.set()
-        self._client = None
+        """No-op — connections are already short-lived."""
+        self._connected = False

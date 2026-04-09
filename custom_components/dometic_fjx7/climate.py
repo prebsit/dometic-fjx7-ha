@@ -131,6 +131,7 @@ class FJX7ClimateEntity(CoordinatorEntity[FJX7Coordinator], ClimateEntity):
             ddm_mode = HVAC_TO_DDM.get(hvac_mode)
             if ddm_mode is not None:
                 await client.async_set_ac_mode(ddm_mode)
+        await self.coordinator.async_request_refresh()
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
         """Set target temperature."""
@@ -139,6 +140,7 @@ class FJX7ClimateEntity(CoordinatorEntity[FJX7Coordinator], ClimateEntity):
         if client is None or temp is None:
             return
         await client.async_set_temperature(temp)
+        await self.coordinator.async_request_refresh()
 
     async def async_set_fan_mode(self, fan_mode: str) -> None:
         """Set fan speed."""
@@ -148,15 +150,18 @@ class FJX7ClimateEntity(CoordinatorEntity[FJX7Coordinator], ClimateEntity):
         speed = FAN_SPEED_FROM_NAME.get(fan_mode)
         if speed is not None:
             await client.async_set_fan_speed(speed)
+        await self.coordinator.async_request_refresh()
 
     async def async_turn_on(self) -> None:
         """Turn on."""
         client = self.coordinator.client
         if client:
             await client.async_set_power(True)
+        await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self) -> None:
         """Turn off."""
         client = self.coordinator.client
         if client:
             await client.async_set_power(False)
+        await self.coordinator.async_request_refresh()

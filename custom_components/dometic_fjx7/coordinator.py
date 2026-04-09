@@ -1,28 +1,28 @@
 """Coordinator for Dometic FJX7 BLE integration.
 
-Manages the BLE client lifecycle, reconnection, and entity update
-signalling. Entities register callbacks with the coordinator rather
-than polling.
+Uses a polling model — connects, reads state, disconnects — rather
+than holding a persistent BLE connection. This works around the Pi 3B+
+bcm43438 BLE stability issues.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import timedelta
 
-from bleak import BleakError
 from bleak.backends.device import BLEDevice
 
 from homeassistant.components import bluetooth
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .client import FJX7BLEClient, FJX7State
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
-RECONNECT_DELAY = 30  # seconds before reconnect attempt (FJX7 rejects rapid retries)
+POLL_INTERVAL = timedelta(seconds=30)
 
 
 class FJX7Coordinator(DataUpdateCoordinator[FJX7State]):
@@ -38,12 +38,10 @@ class FJX7Coordinator(DataUpdateCoordinator[FJX7State]):
             hass,
             _LOGGER,
             name=f"{DOMAIN}_{address}",
-            # No polling interval — we use BLE notifications (push)
-            update_interval=None,
+            update_interval=POLL_INTERVAL,
         )
         self.address = address
         self._client: FJX7BLEClient | None = None
-        self._reconnect_task: asyncio.Task | None = None
 
     @property
     def client(self) -> FJX7BLEClient | None:
@@ -51,48 +49,40 @@ class FJX7Coordinator(DataUpdateCoordinator[FJX7State]):
 
     @property
     def state(self) -> FJX7State:
-        """Shortcut to current device state."""
         if self._client:
             return self._client.state
         return FJX7State()
 
     @property
     def is_connected(self) -> bool:
-        return self._client is not None and self._client.is_connected
+        # For entity availability — True once we've had at least one successful poll
+        return self._client is not None and self._client.state.got_initial_state
 
     async def async_start(self) -> None:
-        """Start the coordinator — connect to device."""
+        """Start the coordinator — do first poll."""
         ble_device = bluetooth.async_ble_device_from_address(
             self.hass, self.address, connectable=True
         )
         if ble_device is None:
-            _LOGGER.error("FJX7 %s not found via Bluetooth", self.address)
+            _LOGGER.warning("FJX7 %s not found via Bluetooth", self.address)
             return
 
-        await self._connect(ble_device)
-
-    async def async_stop(self) -> None:
-        """Stop the coordinator — disconnect."""
-        if self._reconnect_task:
-            self._reconnect_task.cancel()
-            self._reconnect_task = None
-        if self._client:
-            await self._client.disconnect()
-            self._client = None
-
-    async def _connect(self, ble_device: BLEDevice) -> None:
-        """Establish BLE connection."""
         self._client = FJX7BLEClient(
             ble_device,
             state_callback=self._on_state_changed,
         )
-        try:
-            await self._client.connect()
+
+        # Do first poll
+        success = await self._client.async_poll_state()
+        if success:
             self.async_set_updated_data(self._client.state)
-            _LOGGER.info("FJX7 %s: connected", self.address)
-        except (BleakError, TimeoutError) as err:
-            _LOGGER.warning("FJX7 %s: connection failed: %s", self.address, err)
-            self._schedule_reconnect()
+            _LOGGER.info("FJX7 %s: initial poll successful", self.address)
+        else:
+            _LOGGER.warning("FJX7 %s: initial poll failed, will retry", self.address)
+
+    async def async_stop(self) -> None:
+        """Stop the coordinator."""
+        self._client = None
 
     @callback
     def _on_state_changed(self) -> None:
@@ -100,38 +90,20 @@ class FJX7Coordinator(DataUpdateCoordinator[FJX7State]):
         if self._client:
             self.async_set_updated_data(self._client.state)
 
-    def _schedule_reconnect(self) -> None:
-        """Schedule a reconnection attempt."""
-        if self._reconnect_task and not self._reconnect_task.done():
-            return
-        self._reconnect_task = self.hass.async_create_task(
-            self._reconnect_loop()
-        )
-
-    async def _reconnect_loop(self) -> None:
-        """Attempt reconnection with backoff."""
-        delay = RECONNECT_DELAY
-        while True:
-            _LOGGER.debug("FJX7 %s: reconnecting in %ds", self.address, delay)
-            await asyncio.sleep(delay)
-
-            ble_device = bluetooth.async_ble_device_from_address(
-                self.hass, self.address, connectable=True
-            )
-            if ble_device is None:
-                _LOGGER.debug("FJX7 %s: not visible, retrying", self.address)
-                delay = min(delay * 2, 120)
-                continue
-
-            try:
-                await self._connect(ble_device)
-                if self.is_connected:
-                    _LOGGER.info("FJX7 %s: reconnected", self.address)
-                    return
-            except (BleakError, TimeoutError) as err:
-                _LOGGER.debug("FJX7 %s: reconnect failed: %s", self.address, err)
-                delay = min(delay * 2, 120)
-
     async def _async_update_data(self) -> FJX7State:
-        """Called by DataUpdateCoordinator if polling were enabled."""
-        return self.state
+        """Poll the FJX7 for current state."""
+        if not self._client:
+            raise UpdateFailed("No client")
+
+        # Refresh the BLE device reference
+        ble_device = bluetooth.async_ble_device_from_address(
+            self.hass, self.address, connectable=True
+        )
+        if ble_device:
+            self._client.set_ble_device(ble_device)
+
+        success = await self._client.async_poll_state()
+        if not success:
+            raise UpdateFailed("Poll failed")
+
+        return self._client.state
