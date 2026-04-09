@@ -12,6 +12,6 @@
   ],
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/prebsit/dometic-fjx7-ha/issues",
-  "requirements": ["bleak-retry-connector>=3.5.0"],
+  "requirements": [],
   "version": "0.1.0"
 }

@@ -14,7 +14,6 @@ from typing import Callable
 from bleak import BleakError
 from bleak.backends.device import BLEDevice
 from bleak import BleakClient
-from bleak_retry_connector import establish_connection
 
 from .const import (
     GRP_CLIMATE,
@@ -121,13 +120,12 @@ class FJX7BLEClient:
         """Connect to the FJX7 and subscribe to climate notifications."""
         _LOGGER.debug("Connecting to %s", self._ble_device.name)
 
-        self._client = await establish_connection(
-            BleakClient,
+        self._client = BleakClient(
             self._ble_device,
-            self._ble_device.name or "FJX7",
             disconnected_callback=self._on_disconnect,
             timeout=30.0,
         )
+        await self._client.connect()
 
         _LOGGER.debug("Connected, waiting for GATT services")
         await asyncio.sleep(1.0)  # let Pi BLE stack settle
