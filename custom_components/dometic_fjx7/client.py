@@ -141,14 +141,20 @@ class FJX7BLEClient:
             await client.start_notify(NOTIFY_UUID, on_notify)
 
             _LOGGER.debug("FJX7: subscribing to params")
+            success_count = 0
             for i, param in enumerate(SUBSCRIBE_PARAMS):
                 cmd = encode_subscribe(param)
                 _LOGGER.debug("FJX7: writing subscribe %d/%d param=0x%02x", i+1, len(SUBSCRIBE_PARAMS), param)
-                await client.write_gatt_char(WRITE_UUID, cmd, response=False)
-                await asyncio.sleep(0.2)
+                try:
+                    await client.write_gatt_char(WRITE_UUID, cmd, response=False)
+                    success_count += 1
+                except Exception as write_err:
+                    _LOGGER.debug("FJX7: subscribe write failed at %d/%d: %s", i+1, len(SUBSCRIBE_PARAMS), write_err)
+                    break
+                await asyncio.sleep(0.05)
 
-            _LOGGER.debug("FJX7: waiting for notifications")
-            await asyncio.sleep(1.0)
+            _LOGGER.debug("FJX7: %d/%d subscribes sent, waiting for notifications", success_count, len(SUBSCRIBE_PARAMS))
+            await asyncio.sleep(0.5)
 
             await client.stop_notify(NOTIFY_UUID)
             await client.disconnect()
