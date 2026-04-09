@@ -55,7 +55,11 @@ class FJX7Coordinator(DataUpdateCoordinator[FJX7State]):
 
     @property
     def is_connected(self) -> bool:
-        # For entity availability — True once we've had at least one successful poll
+        # Available once we've had at least one successful poll
+        return self._client is not None and self._client.state.got_initial_state
+
+    @property
+    def has_polled(self) -> bool:
         return self._client is not None and self._client.state.got_initial_state
 
     async def async_start(self) -> None:
@@ -72,13 +76,16 @@ class FJX7Coordinator(DataUpdateCoordinator[FJX7State]):
             state_callback=self._on_state_changed,
         )
 
-        # Do first poll
-        success = await self._client.async_poll_state()
-        if success:
-            self.async_set_updated_data(self._client.state)
-            _LOGGER.info("FJX7 %s: initial poll successful", self.address)
-        else:
-            _LOGGER.warning("FJX7 %s: initial poll failed, will retry", self.address)
+        # Do first poll — don't fail setup if it doesn't work yet
+        try:
+            success = await self._client.async_poll_state()
+            if success:
+                self.async_set_updated_data(self._client.state)
+                _LOGGER.info("FJX7 %s: initial poll successful", self.address)
+            else:
+                _LOGGER.warning("FJX7 %s: initial poll failed, will retry in %ss", self.address, POLL_INTERVAL.seconds)
+        except Exception as err:
+            _LOGGER.warning("FJX7 %s: initial poll error: %s, will retry", self.address, err)
 
     async def async_stop(self) -> None:
         """Stop the coordinator."""
