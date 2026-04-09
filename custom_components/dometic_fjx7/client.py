@@ -151,13 +151,19 @@ class FJX7BLEClient:
                 except Exception as write_err:
                     _LOGGER.debug("FJX7: subscribe write failed at %d/%d: %s", i+1, len(SUBSCRIBE_PARAMS), write_err)
                     break
-                await asyncio.sleep(0.05)
+                await asyncio.sleep(0.15)
 
             _LOGGER.debug("FJX7: %d/%d subscribes sent, waiting for notifications", success_count, len(SUBSCRIBE_PARAMS))
             await asyncio.sleep(0.5)
 
-            await client.stop_notify(NOTIFY_UUID)
-            await client.disconnect()
+            try:
+                await client.stop_notify(NOTIFY_UUID)
+            except Exception:
+                pass
+            try:
+                await client.disconnect()
+            except Exception:
+                pass
             self._connected = False
 
             # Process collected notifications

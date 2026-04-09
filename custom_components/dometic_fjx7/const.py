@@ -35,18 +35,18 @@ PARAM_EXTERIOR_LIGHT = 0x0E
 PARAM_UNKNOWN_1B = 0x1B
 PARAM_UNKNOWN_1C = 0x1C
 
-# All params to subscribe to on connection
+# Essential params first — connection may drop mid-subscribe
 SUBSCRIBE_PARAMS = [
     PARAM_POWER,
+    PARAM_TARGET_TEMP,
+    PARAM_MEASURED_TEMP,
+    PARAM_AC_MODE,
+    PARAM_FAN_SPEED,
     PARAM_FAN_SPEED_PCT,
     PARAM_INTERIOR_LIGHT,
     PARAM_EXTERIOR_LIGHT,
     PARAM_UNKNOWN_1B,
-    PARAM_FAN_SPEED,
-    PARAM_AC_MODE,
     PARAM_UNKNOWN_09,
-    PARAM_MEASURED_TEMP,
-    PARAM_TARGET_TEMP,
 ]
 
 # ── AC mode mapping ──────────────────────────────────────────────
