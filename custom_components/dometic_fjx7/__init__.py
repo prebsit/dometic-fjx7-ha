@@ -23,11 +23,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: FJX7ConfigEntry) -> bool
     address: str = entry.data[CONF_ADDRESS]
 
     coordinator = FJX7Coordinator(hass, address)
-    await coordinator.async_start()
-
     entry.runtime_data = coordinator
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    # Connect in background — don't block HA startup
+    entry.async_create_background_task(
+        hass, coordinator.async_start(), f"dometic_fjx7_{address}_connect"
+    )
 
     entry.async_on_unload(coordinator.async_stop)
 

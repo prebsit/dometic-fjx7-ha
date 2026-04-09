@@ -13,10 +13,8 @@ from typing import Callable
 
 from bleak import BleakError
 from bleak.backends.device import BLEDevice
-from bleak_retry_connector import (
-    BleakClientWithServiceCache,
-    establish_connection,
-)
+from bleak import BleakClient
+from bleak_retry_connector import establish_connection
 
 from .const import (
     GRP_CLIMATE,
@@ -106,7 +104,7 @@ class FJX7BLEClient:
         state_callback: Callable[[], None] | None = None,
     ) -> None:
         self._ble_device = ble_device
-        self._client: BleakClientWithServiceCache | None = None
+        self._client: BleakClient | None = None
         self._state_callback = state_callback
         self._disconnect_event = asyncio.Event()
         self.state = FJX7State()
@@ -124,10 +122,11 @@ class FJX7BLEClient:
         _LOGGER.debug("Connecting to %s", self._ble_device.name)
 
         self._client = await establish_connection(
-            BleakClientWithServiceCache,
+            BleakClient,
             self._ble_device,
             self._ble_device.name or "FJX7",
             disconnected_callback=self._on_disconnect,
+            timeout=30.0,
         )
 
         _LOGGER.debug("Connected, waiting for GATT services")
@@ -199,7 +198,7 @@ class FJX7BLEClient:
         if changed and self._state_callback:
             self._state_callback()
 
-    def _on_disconnect(self, _client: BleakClientWithServiceCache) -> None:
+    def _on_disconnect(self, _client: BleakClient) -> None:
         """Handle unexpected disconnection."""
         _LOGGER.warning("FJX7 %s: disconnected", self._ble_device.name)
         self._disconnect_event.set()
