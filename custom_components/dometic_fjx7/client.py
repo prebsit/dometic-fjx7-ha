@@ -144,8 +144,8 @@ class FJX7BLEClient:
             for i, param in enumerate(SUBSCRIBE_PARAMS):
                 cmd = encode_subscribe(param)
                 _LOGGER.debug("FJX7: writing subscribe %d/%d param=0x%02x", i+1, len(SUBSCRIBE_PARAMS), param)
-                await client.write_gatt_char(WRITE_UUID, cmd, response=True)
-                await asyncio.sleep(0.15)
+                await client.write_gatt_char(WRITE_UUID, cmd, response=False)
+                await asyncio.sleep(0.2)
 
             _LOGGER.debug("FJX7: waiting for notifications")
             await asyncio.sleep(1.0)
@@ -204,7 +204,7 @@ class FJX7BLEClient:
             self._connected = True
 
             await client.start_notify(NOTIFY_UUID, on_notify)
-            await client.write_gatt_char(WRITE_UUID, data, response=True)
+            await client.write_gatt_char(WRITE_UUID, data, response=False)
             _LOGGER.debug("FJX7: command sent, waiting for echo")
 
             try:
