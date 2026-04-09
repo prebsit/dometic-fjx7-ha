@@ -130,14 +130,22 @@ class FJX7BLEClient:
             disconnected_callback=self._on_disconnect,
         )
 
-        _LOGGER.debug("Connected, enabling notifications")
+        _LOGGER.debug("Connected, waiting for GATT services")
+        await asyncio.sleep(1.0)  # let Pi BLE stack settle
+
+        _LOGGER.debug("Enabling notifications")
         await self._client.start_notify(NOTIFY_UUID, self._on_notification)
+        await asyncio.sleep(0.5)
 
         _LOGGER.debug("Subscribing to %d climate params", len(SUBSCRIBE_PARAMS))
         for param in SUBSCRIBE_PARAMS:
             cmd = encode_subscribe(param)
-            await self._client.write_gatt_char(WRITE_UUID, cmd, response=True)
-            await asyncio.sleep(WRITE_PACING)
+            try:
+                await self._client.write_gatt_char(WRITE_UUID, cmd, response=True)
+            except Exception as err:
+                _LOGGER.warning("FJX7: subscribe param 0x%02x failed: %s", param, err)
+                raise
+            await asyncio.sleep(0.3)  # slower pacing for Pi BLE
 
         _LOGGER.info(
             "FJX7 %s: connected and subscribed", self._ble_device.name
