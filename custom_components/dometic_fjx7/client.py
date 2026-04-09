@@ -120,35 +120,40 @@ class FJX7BLEClient:
     async def async_poll_state(self) -> bool:
         """Connect, subscribe, collect state, disconnect. Returns True on success."""
         address = self._ble_device.address
-        _LOGGER.debug("FJX7: polling state from %s (%s)", self._ble_device.name, address)
+        _LOGGER.info("FJX7: poll starting for %s (%s)", self._ble_device.name, address)
 
         notifications: list[bytearray] = []
 
         def on_notify(_sender: int, data: bytearray) -> None:
             notifications.append(data)
 
+        client = None
         try:
-            async with BleakClient(
-                self._ble_device,
-                timeout=20.0,
-            ) as client:
-                self._connected = True
-                _LOGGER.debug("FJX7: connected, subscribing")
+            _LOGGER.debug("FJX7: creating BleakClient")
+            client = BleakClient(address, timeout=15.0, adapter="hci0")
 
-                await client.start_notify(NOTIFY_UUID, on_notify)
+            _LOGGER.debug("FJX7: calling connect()")
+            await client.connect()
+            self._connected = True
+            _LOGGER.info("FJX7: connected! services: %d", len(client.services.services))
 
-                for param in SUBSCRIBE_PARAMS:
-                    cmd = encode_subscribe(param)
-                    await client.write_gatt_char(WRITE_UUID, cmd, response=True)
-                    await asyncio.sleep(0.15)
+            _LOGGER.debug("FJX7: starting notifications")
+            await client.start_notify(NOTIFY_UUID, on_notify)
 
-                # Wait for notifications to arrive
-                await asyncio.sleep(1.0)
+            _LOGGER.debug("FJX7: subscribing to params")
+            for param in SUBSCRIBE_PARAMS:
+                cmd = encode_subscribe(param)
+                await client.write_gatt_char(WRITE_UUID, cmd, response=True)
+                await asyncio.sleep(0.15)
 
-                await client.stop_notify(NOTIFY_UUID)
+            _LOGGER.debug("FJX7: waiting for notifications")
+            await asyncio.sleep(1.0)
 
-            # Process all collected notifications after disconnect
+            await client.stop_notify(NOTIFY_UUID)
+            await client.disconnect()
             self._connected = False
+
+            # Process collected notifications
             changed = False
             for data in notifications:
                 report = decode_report(data)
@@ -165,14 +170,20 @@ class FJX7BLEClient:
             )
             return len(notifications) > 0
 
-        except (BleakError, TimeoutError, asyncio.TimeoutError) as err:
+        except (BleakError, TimeoutError, asyncio.TimeoutError, OSError) as err:
             self._connected = False
-            _LOGGER.warning("FJX7: poll failed: %s", err)
+            _LOGGER.warning("FJX7: poll failed: %s: %s", type(err).__name__, err)
+            if client and client.is_connected:
+                try:
+                    await client.disconnect()
+                except Exception:
+                    pass
             return False
 
     async def async_send_command(self, data: bytes) -> bool:
         """Connect, send a single command, wait for echo, disconnect."""
-        _LOGGER.debug("FJX7: sending command %s", data.hex())
+        address = self._ble_device.address
+        _LOGGER.info("FJX7: sending command %s to %s", data.hex(), address)
 
         echo_received = asyncio.Event()
         echo_data: list[bytearray] = []
@@ -184,24 +195,23 @@ class FJX7BLEClient:
                 self.state.update_from_report(report)
                 echo_received.set()
 
+        client = None
         try:
-            async with BleakClient(
-                self._ble_device,
-                timeout=20.0,
-            ) as client:
-                self._connected = True
-                await client.start_notify(NOTIFY_UUID, on_notify)
+            client = BleakClient(address, timeout=15.0, adapter="hci0")
+            await client.connect()
+            self._connected = True
 
-                await client.write_gatt_char(WRITE_UUID, data, response=True)
-                _LOGGER.debug("FJX7: command sent, waiting for echo")
+            await client.start_notify(NOTIFY_UUID, on_notify)
+            await client.write_gatt_char(WRITE_UUID, data, response=True)
+            _LOGGER.debug("FJX7: command sent, waiting for echo")
 
-                try:
-                    await asyncio.wait_for(echo_received.wait(), timeout=3.0)
-                except asyncio.TimeoutError:
-                    _LOGGER.debug("FJX7: no echo within 3s")
+            try:
+                await asyncio.wait_for(echo_received.wait(), timeout=3.0)
+            except asyncio.TimeoutError:
+                _LOGGER.debug("FJX7: no echo within 3s")
 
-                await client.stop_notify(NOTIFY_UUID)
-
+            await client.stop_notify(NOTIFY_UUID)
+            await client.disconnect()
             self._connected = False
 
             if self._state_callback and echo_data:
@@ -210,9 +220,14 @@ class FJX7BLEClient:
             _LOGGER.info("FJX7: command complete, %d echoes", len(echo_data))
             return True
 
-        except (BleakError, TimeoutError, asyncio.TimeoutError) as err:
+        except (BleakError, TimeoutError, asyncio.TimeoutError, OSError) as err:
             self._connected = False
-            _LOGGER.warning("FJX7: command failed: %s", err)
+            _LOGGER.warning("FJX7: command failed: %s: %s", type(err).__name__, err)
+            if client and client.is_connected:
+                try:
+                    await client.disconnect()
+                except Exception:
+                    pass
             return False
 
     async def async_set_temperature(self, celsius: float) -> bool:
