@@ -132,29 +132,20 @@ class FJX7BLEClient:
             await client.start_notify(NOTIFY_UUID, on_notify)
             _LOGGER.debug("FJX7: notifications enabled")
 
-            # Fire Write Requests with short timeout - FJX7 may process
-            # the write but never send ATT Write Response (BlueZ hangs)
-            # Notifications should still arrive on the callback
-            success_count = 0
-            for i, param in enumerate(SUBSCRIBE_PARAMS):
-                cmd = encode_subscribe(param)
-                _LOGGER.debug("FJX7: writing subscribe %d/%d param=0x%02x", i+1, len(SUBSCRIBE_PARAMS), param)
-                try:
-                    await asyncio.wait_for(
-                        client.write_gatt_char(WRITE_UUID, cmd, response=True),
-                        timeout=0.3,
-                    )
-                    _LOGGER.debug("FJX7: subscribe %d OK (got ATT response)", i+1)
-                    success_count += 1
-                except asyncio.TimeoutError:
-                    success_count += 1  # write was sent, just no ATT ack
-                    _LOGGER.debug("FJX7: subscribe %d sent (no ATT ack, expected)", i+1)
-                except Exception as write_err:
-                    _LOGGER.debug("FJX7: subscribe %d failed: %s: %s", i+1, type(write_err).__name__, write_err)
-                    break
+            # Send ONE subscribe and let it run to natural completion/timeout
+            # Don't cancel with asyncio.wait_for - let BlueZ finish the ATT PDU
+            cmd = encode_subscribe(SUBSCRIBE_PARAMS[0])  # PARAM_POWER
+            _LOGGER.debug("FJX7: writing single subscribe for power: %s", cmd.hex())
+            try:
+                await client.write_gatt_char(WRITE_UUID, cmd, response=True)
+                _LOGGER.info("FJX7: write completed with ATT response!")
+            except Exception as write_err:
+                _LOGGER.debug("FJX7: write ended: %s: %s (checking for notifications anyway)", type(write_err).__name__, write_err)
 
-            _LOGGER.debug("FJX7: %d/%d subscribes sent, waiting 3s for notifications", success_count, len(SUBSCRIBE_PARAMS))
-            await asyncio.sleep(3.0)
+            # Check if any notifications arrived during or after the write
+            _LOGGER.debug("FJX7: notifications so far: %d, waiting 2s more", len(notifications))
+            await asyncio.sleep(2.0)
+            _LOGGER.info("FJX7: total notifications: %d", len(notifications))
 
             try:
                 await client.stop_notify(NOTIFY_UUID)
@@ -176,7 +167,7 @@ class FJX7BLEClient:
             if changed and self._state_callback:
                 self._state_callback()
 
-            _LOGGER.info("FJX7: poll complete, %d/%d subscribes, %d notifications", success_count, len(SUBSCRIBE_PARAMS), len(notifications))
+            _LOGGER.info("FJX7: poll complete, %d notifications", len(notifications))
             return len(notifications) > 0
 
         except Exception as err:
