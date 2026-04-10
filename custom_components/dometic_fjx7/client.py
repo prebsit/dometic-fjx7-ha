@@ -128,58 +128,33 @@ class FJX7BLEClient:
             self._connected = True
             _LOGGER.info("FJX7: connected! services: %d", len(client.services.services))
 
-            # Log all services and characteristics for debugging
-            for svc in client.services:
-                _LOGGER.debug("FJX7: service: %s", svc.uuid)
-                for char in svc.characteristics:
-                    _LOGGER.debug("FJX7:   char: %s props=%s handle=0x%04x", char.uuid, char.properties, char.handle)
+            # Enable notifications FIRST
+            await client.start_notify(NOTIFY_UUID, on_notify)
+            _LOGGER.debug("FJX7: notifications enabled")
 
-            # Test: read device name (should work)
-            try:
-                val = await client.read_gatt_char(0x0002)
-                _LOGGER.info("FJX7: device name read OK: %s", val.decode('utf-8', errors='replace') if val else "empty")
-            except Exception as read_err:
-                _LOGGER.debug("FJX7: device name read failed: %s: %s", type(read_err).__name__, read_err)
-
-            # Test: read appearance (should also work)
-            try:
-                val = await client.read_gatt_char(0x0004)
-                _LOGGER.info("FJX7: appearance read OK: %s", val.hex() if val else "empty")
-            except Exception as read_err:
-                _LOGGER.debug("FJX7: appearance read failed: %s: %s", type(read_err).__name__, read_err)
-
-            # Test: write to Client Supported Features (0x000c) - does ANY write work?
-            try:
-                await client.write_gatt_char(0x000c, b'\x01', response=True)
-                _LOGGER.info("FJX7: test write to 0x000c OK!")
-            except Exception as write_err:
-                _LOGGER.debug("FJX7: test write to 0x000c failed: %s: %s", type(write_err).__name__, write_err)
-
-            # Also try writing 0x0010 (the VALUE handle from iOS capture, one above 0x000f)
-            cmd = encode_subscribe(SUBSCRIBE_PARAMS[0])  # power subscribe
-            try:
-                await client.write_gatt_char(0x0010, cmd, response=True)
-                _LOGGER.info("FJX7: write to handle 0x0010 OK!")
-            except Exception as write_err:
-                _LOGGER.debug("FJX7: write to 0x0010 failed: %s: %s", type(write_err).__name__, write_err)
-
-            # Try writing by handle (0x000f) instead of UUID
-            write_handle = 0x000f
+            # Fire Write Requests with short timeout - FJX7 may process
+            # the write but never send ATT Write Response (BlueZ hangs)
+            # Notifications should still arrive on the callback
             success_count = 0
             for i, param in enumerate(SUBSCRIBE_PARAMS):
                 cmd = encode_subscribe(param)
-                _LOGGER.debug("FJX7: writing subscribe %d/%d param=0x%02x to handle 0x%04x", i+1, len(SUBSCRIBE_PARAMS), param, write_handle)
+                _LOGGER.debug("FJX7: writing subscribe %d/%d param=0x%02x", i+1, len(SUBSCRIBE_PARAMS), param)
                 try:
-                    await client.write_gatt_char(write_handle, cmd, response=True)
+                    await asyncio.wait_for(
+                        client.write_gatt_char(WRITE_UUID, cmd, response=True),
+                        timeout=0.3,
+                    )
+                    _LOGGER.debug("FJX7: subscribe %d OK (got ATT response)", i+1)
                     success_count += 1
+                except asyncio.TimeoutError:
+                    success_count += 1  # write was sent, just no ATT ack
+                    _LOGGER.debug("FJX7: subscribe %d sent (no ATT ack, expected)", i+1)
                 except Exception as write_err:
-                    _LOGGER.debug("FJX7: subscribe write failed at %d/%d: %s: %s", i+1, len(SUBSCRIBE_PARAMS), type(write_err).__name__, write_err)
+                    _LOGGER.debug("FJX7: subscribe %d failed: %s: %s", i+1, type(write_err).__name__, write_err)
                     break
 
-            _LOGGER.debug("FJX7: %d/%d subscribes sent, now enabling notifications", success_count, len(SUBSCRIBE_PARAMS))
-            await client.start_notify(NOTIFY_UUID, on_notify)
-            _LOGGER.debug("FJX7: notifications enabled, waiting for data")
-            await asyncio.sleep(2.0)
+            _LOGGER.debug("FJX7: %d/%d subscribes sent, waiting 3s for notifications", success_count, len(SUBSCRIBE_PARAMS))
+            await asyncio.sleep(3.0)
 
             try:
                 await client.stop_notify(NOTIFY_UUID)
