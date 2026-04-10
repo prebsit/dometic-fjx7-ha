@@ -2,11 +2,19 @@
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
 
+> **⚠️ STATUS: Work in Progress — Not yet functional on Linux/BlueZ**
+>
+> The DDM protocol is fully decoded and bidirectional control is **proven working** from macOS (CoreBluetooth + bleak). However, the FJX7's Microchip BLE module has a firmware bug where it does not send ATT Write Responses to Linux's BlueZ stack, causing the connection to drop on every write attempt. This affects **all** Linux BLE adapters (tested: Pi 3B+ bcm43438, TP-Link UB500 RTL8761B). macOS works perfectly.
+>
+> **Next step:** Testing with ESPHome Bluetooth Proxy (ESP32, uses ESP-IDF stack instead of BlueZ). If you have an FJX7 and want to help test, open an issue!
+>
+> **If you're a Dometic engineer reading this:** your BLE firmware doesn't send ATT Write Response (opcode 0x13) for writes to characteristic `537a0401`. This breaks every BLE stack except Apple's CoreBluetooth, which silently handles the missing response. This is almost certainly why your Android app has terrible reviews.
+
 Control your Dometic FreshJet FJX7 roof-mounted aircon from Home Assistant over Bluetooth Low Energy.
 
-**No cloud. No Dometic app. No additional hardware required.**
+**No cloud. No Dometic app.**
 
-Works with the built-in Bluetooth adapter on your HA host (Raspberry Pi, NUC, etc.) or via [ESPHome Bluetooth Proxy](https://esphome.io/components/bluetooth_proxy.html) for extended range.
+**Currently requires:** ESPHome Bluetooth Proxy (ESP32) or macOS host. Linux/BlueZ is not compatible due to a Dometic firmware bug.
 
 ## Features
 
@@ -20,11 +28,11 @@ Works with the built-in Bluetooth adapter on your HA host (Raspberry Pi, NUC, et
 
 ## Supported Devices
 
-| Device | Firmware | Status |
-|--------|----------|--------|
-| FreshJet FJX7 | SHE_2.0.1 | ✅ Tested |
-| FreshJet FJX5 | Unknown | 🔮 Likely compatible (same DDM protocol) |
-| FreshJet FJX3 | Unknown | 🔮 Likely compatible |
+| Device | Firmware | Protocol | HA Integration |
+|--------|----------|----------|----------------|
+| FreshJet FJX7 | SHE_2.0.1 | ✅ Fully decoded | ⚠️ Blocked by BlueZ (ESP32 proxy untested) |
+| FreshJet FJX5 | Unknown | 🔮 Likely same DDM | Untested |
+| FreshJet FJX3 | Unknown | 🔮 Likely same DDM | Untested |
 
 The DDM protocol is shared across the Dometic connected product range. If you have a different FJX model, please test and report back!
 
