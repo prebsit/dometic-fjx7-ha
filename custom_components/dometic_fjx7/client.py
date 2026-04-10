@@ -1,8 +1,7 @@
 """BLE client for Dometic FJX7.
 
 Manages BLE connection, notification subscriptions, and state.
-Uses a connect-operate-disconnect pattern for reliability on
-Pi 3B+ bcm43438 (known BLE stability issues with persistent connections).
+Uses a connect-operate-disconnect pattern for reliability.
 """
 
 from __future__ import annotations
@@ -13,9 +12,9 @@ from typing import Callable
 
 from bleak import BleakClient, BleakError
 from bleak.backends.device import BLEDevice
+from bleak_retry_connector import establish_connection
 
 from .const import (
-    GRP_CLIMATE,
     NOTIFY_UUID,
     PARAM_AC_MODE,
     PARAM_EXTERIOR_LIGHT,
@@ -25,8 +24,6 @@ from .const import (
     PARAM_MEASURED_TEMP,
     PARAM_POWER,
     PARAM_TARGET_TEMP,
-    PARAM_UNKNOWN_09,
-    PARAM_UNKNOWN_1B,
     SUBSCRIBE_PARAMS,
     WRITE_UUID,
 )
@@ -56,10 +53,8 @@ class FJX7State:
         self._raw: dict[int, int] = {}
 
     def update_from_report(self, report: DDMReport) -> bool:
-        """Apply a DDM report to state. Returns True if state changed."""
         if not report.is_climate:
             return False
-
         old = self._raw.get(report.param_id)
         self._raw[report.param_id] = report.raw_value
 
@@ -84,7 +79,6 @@ class FJX7State:
 
     @property
     def got_initial_state(self) -> bool:
-        """True once we have the essential params."""
         return all(
             p in self._raw
             for p in (PARAM_POWER, PARAM_TARGET_TEMP, PARAM_MEASURED_TEMP)
@@ -92,12 +86,7 @@ class FJX7State:
 
 
 class FJX7BLEClient:
-    """Manages BLE communication with a Dometic FJX7.
-
-    Uses a connect-subscribe-collect-disconnect pattern rather than
-    holding a persistent connection. The Pi 3B+ bcm43438 has known
-    BLE stability issues with long-lived connections.
-    """
+    """Manages BLE communication with a Dometic FJX7."""
 
     def __init__(
         self,
@@ -114,11 +103,10 @@ class FJX7BLEClient:
         return self._connected
 
     def set_ble_device(self, ble_device: BLEDevice) -> None:
-        """Update the BLE device reference (e.g. after rediscovery)."""
         self._ble_device = ble_device
 
     async def async_poll_state(self) -> bool:
-        """Connect, subscribe, collect state, disconnect. Returns True on success."""
+        """Connect, subscribe, collect state, disconnect."""
         address = self._ble_device.address
         _LOGGER.info("FJX7: poll starting for %s (%s)", self._ble_device.name, address)
 
@@ -129,39 +117,32 @@ class FJX7BLEClient:
 
         client = None
         try:
-            _LOGGER.debug("FJX7: creating BleakClient with BLEDevice")
-            client = BleakClient(self._ble_device, timeout=15.0)
-
-            _LOGGER.debug("FJX7: calling connect()")
-            await client.connect()
+            client = await establish_connection(
+                BleakClient,
+                self._ble_device,
+                self._ble_device.name or "FJX7",
+                max_attempts=2,
+                ble_device_callback=lambda: self._ble_device,
+            )
             self._connected = True
             _LOGGER.info("FJX7: connected! services: %d", len(client.services.services))
 
-            _LOGGER.debug("FJX7: starting notifications")
             await client.start_notify(NOTIFY_UUID, on_notify)
 
-            _LOGGER.debug("FJX7: subscribing to params")
             success_count = 0
             for i, param in enumerate(SUBSCRIBE_PARAMS):
                 cmd = encode_subscribe(param)
                 _LOGGER.debug("FJX7: writing subscribe %d/%d param=0x%02x", i+1, len(SUBSCRIBE_PARAMS), param)
                 try:
-                    await asyncio.wait_for(
-                        client.write_gatt_char(WRITE_UUID, cmd, response=True),
-                        timeout=0.5,
-                    )
+                    await client.write_gatt_char(WRITE_UUID, cmd, response=True)
                     success_count += 1
-                except asyncio.TimeoutError:
-                    # Write was sent at HCI level even if D-Bus response was slow
-                    success_count += 1
-                    _LOGGER.debug("FJX7: subscribe %d/%d write timeout (probably OK)", i+1, len(SUBSCRIBE_PARAMS))
                 except Exception as write_err:
                     _LOGGER.debug("FJX7: subscribe write failed at %d/%d: %s", i+1, len(SUBSCRIBE_PARAMS), write_err)
                     break
                 await asyncio.sleep(0.15)
 
             _LOGGER.debug("FJX7: %d/%d subscribes sent, waiting for notifications", success_count, len(SUBSCRIBE_PARAMS))
-            await asyncio.sleep(1.5)
+            await asyncio.sleep(1.0)
 
             try:
                 await client.stop_notify(NOTIFY_UUID)
@@ -173,7 +154,6 @@ class FJX7BLEClient:
                 pass
             self._connected = False
 
-            # Process collected notifications
             changed = False
             for data in notifications:
                 report = decode_report(data)
@@ -184,10 +164,7 @@ class FJX7BLEClient:
             if changed and self._state_callback:
                 self._state_callback()
 
-            _LOGGER.info(
-                "FJX7: poll complete, got %d notifications, state changed: %s",
-                len(notifications), changed,
-            )
+            _LOGGER.info("FJX7: poll complete, %d/%d subscribes, %d notifications", success_count, len(SUBSCRIBE_PARAMS), len(notifications))
             return len(notifications) > 0
 
         except Exception as err:
@@ -203,8 +180,7 @@ class FJX7BLEClient:
 
     async def async_send_command(self, data: bytes) -> bool:
         """Connect, send a single command, wait for echo, disconnect."""
-        address = self._ble_device.address
-        _LOGGER.info("FJX7: sending command %s to %s", data.hex(), address)
+        _LOGGER.info("FJX7: sending command %s", data.hex())
 
         echo_received = asyncio.Event()
         echo_data: list[bytearray] = []
@@ -218,18 +194,17 @@ class FJX7BLEClient:
 
         client = None
         try:
-            client = BleakClient(self._ble_device, timeout=15.0)
-            await client.connect()
+            client = await establish_connection(
+                BleakClient,
+                self._ble_device,
+                self._ble_device.name or "FJX7",
+                max_attempts=2,
+                ble_device_callback=lambda: self._ble_device,
+            )
             self._connected = True
 
             await client.start_notify(NOTIFY_UUID, on_notify)
-            try:
-                await asyncio.wait_for(
-                    client.write_gatt_char(WRITE_UUID, data, response=True),
-                    timeout=0.5,
-                )
-            except asyncio.TimeoutError:
-                _LOGGER.debug("FJX7: command write timeout (probably OK)")
+            await client.write_gatt_char(WRITE_UUID, data, response=True)
             _LOGGER.debug("FJX7: command sent, waiting for echo")
 
             try:
@@ -237,8 +212,14 @@ class FJX7BLEClient:
             except asyncio.TimeoutError:
                 _LOGGER.debug("FJX7: no echo within 3s")
 
-            await client.stop_notify(NOTIFY_UUID)
-            await client.disconnect()
+            try:
+                await client.stop_notify(NOTIFY_UUID)
+            except Exception:
+                pass
+            try:
+                await client.disconnect()
+            except Exception:
+                pass
             self._connected = False
 
             if self._state_callback and echo_data:
@@ -274,9 +255,7 @@ class FJX7BLEClient:
         return await self.async_send_command(encode_set(param_id, 1 if on else 0))
 
     async def connect(self) -> None:
-        """Initial state poll on startup."""
         await self.async_poll_state()
 
     async def disconnect(self) -> None:
-        """No-op — connections are already short-lived."""
         self._connected = False
