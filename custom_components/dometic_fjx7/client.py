@@ -122,27 +122,27 @@ class FJX7BLEClient:
                 BleakClient,
                 self._ble_device,
                 self._ble_device.name or "FJX7",
-                max_attempts=2,
+                max_attempts=1,
                 ble_device_callback=lambda: self._ble_device,
             )
             self._connected = True
             _LOGGER.info("FJX7: connected! services: %d", len(client.services.services))
 
-            await client.start_notify(NOTIFY_UUID, on_notify)
-
+            # Write subscribes BEFORE enabling notifications
             success_count = 0
             for i, param in enumerate(SUBSCRIBE_PARAMS):
                 cmd = encode_subscribe(param)
                 _LOGGER.debug("FJX7: writing subscribe %d/%d param=0x%02x", i+1, len(SUBSCRIBE_PARAMS), param)
                 try:
-                    await client.write_gatt_char(WRITE_UUID, cmd, response=False)
+                    await client.write_gatt_char(WRITE_UUID, cmd, response=True)
                     success_count += 1
                 except Exception as write_err:
-                    _LOGGER.debug("FJX7: subscribe write failed at %d/%d: %s", i+1, len(SUBSCRIBE_PARAMS), write_err)
+                    _LOGGER.debug("FJX7: subscribe write failed at %d/%d: %s: %s", i+1, len(SUBSCRIBE_PARAMS), type(write_err).__name__, write_err)
                     break
-                await asyncio.sleep(0.3)
 
-            _LOGGER.debug("FJX7: %d/%d subscribes sent, waiting for notifications", success_count, len(SUBSCRIBE_PARAMS))
+            _LOGGER.debug("FJX7: %d/%d subscribes sent, now enabling notifications", success_count, len(SUBSCRIBE_PARAMS))
+            await client.start_notify(NOTIFY_UUID, on_notify)
+            _LOGGER.debug("FJX7: notifications enabled, waiting for data")
             await asyncio.sleep(2.0)
 
             try:
@@ -199,13 +199,13 @@ class FJX7BLEClient:
                 BleakClient,
                 self._ble_device,
                 self._ble_device.name or "FJX7",
-                max_attempts=2,
+                max_attempts=1,
                 ble_device_callback=lambda: self._ble_device,
             )
             self._connected = True
 
             await client.start_notify(NOTIFY_UUID, on_notify)
-            await client.write_gatt_char(WRITE_UUID, data, response=False)
+            await client.write_gatt_char(WRITE_UUID, data, response=True)
             _LOGGER.debug("FJX7: command sent, waiting for echo")
 
             try:
