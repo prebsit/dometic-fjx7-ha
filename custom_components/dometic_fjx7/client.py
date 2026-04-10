@@ -148,6 +148,21 @@ class FJX7BLEClient:
             except Exception as read_err:
                 _LOGGER.debug("FJX7: appearance read failed: %s: %s", type(read_err).__name__, read_err)
 
+            # Test: write to Client Supported Features (0x000c) - does ANY write work?
+            try:
+                await client.write_gatt_char(0x000c, b'\x01', response=True)
+                _LOGGER.info("FJX7: test write to 0x000c OK!")
+            except Exception as write_err:
+                _LOGGER.debug("FJX7: test write to 0x000c failed: %s: %s", type(write_err).__name__, write_err)
+
+            # Also try writing 0x0010 (the VALUE handle from iOS capture, one above 0x000f)
+            cmd = encode_subscribe(SUBSCRIBE_PARAMS[0])  # power subscribe
+            try:
+                await client.write_gatt_char(0x0010, cmd, response=True)
+                _LOGGER.info("FJX7: write to handle 0x0010 OK!")
+            except Exception as write_err:
+                _LOGGER.debug("FJX7: write to 0x0010 failed: %s: %s", type(write_err).__name__, write_err)
+
             # Try writing by handle (0x000f) instead of UUID
             write_handle = 0x000f
             success_count = 0
