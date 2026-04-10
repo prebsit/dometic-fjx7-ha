@@ -134,20 +134,28 @@ class FJX7BLEClient:
                 for char in svc.characteristics:
                     _LOGGER.debug("FJX7:   char: %s props=%s handle=0x%04x", char.uuid, char.properties, char.handle)
 
-            # Test: try a simple read first
+            # Test: read device name (should work)
             try:
-                val = await client.read_gatt_char(NOTIFY_UUID)
-                _LOGGER.info("FJX7: test read OK: %s", val.hex() if val else "empty")
+                val = await client.read_gatt_char(0x0002)
+                _LOGGER.info("FJX7: device name read OK: %s", val.decode('utf-8', errors='replace') if val else "empty")
             except Exception as read_err:
-                _LOGGER.debug("FJX7: test read failed: %s: %s", type(read_err).__name__, read_err)
+                _LOGGER.debug("FJX7: device name read failed: %s: %s", type(read_err).__name__, read_err)
 
-            # Write subscribes BEFORE enabling notifications
+            # Test: read appearance (should also work)
+            try:
+                val = await client.read_gatt_char(0x0004)
+                _LOGGER.info("FJX7: appearance read OK: %s", val.hex() if val else "empty")
+            except Exception as read_err:
+                _LOGGER.debug("FJX7: appearance read failed: %s: %s", type(read_err).__name__, read_err)
+
+            # Try writing by handle (0x000f) instead of UUID
+            write_handle = 0x000f
             success_count = 0
             for i, param in enumerate(SUBSCRIBE_PARAMS):
                 cmd = encode_subscribe(param)
-                _LOGGER.debug("FJX7: writing subscribe %d/%d param=0x%02x", i+1, len(SUBSCRIBE_PARAMS), param)
+                _LOGGER.debug("FJX7: writing subscribe %d/%d param=0x%02x to handle 0x%04x", i+1, len(SUBSCRIBE_PARAMS), param, write_handle)
                 try:
-                    await client.write_gatt_char(WRITE_UUID, cmd, response=True)
+                    await client.write_gatt_char(write_handle, cmd, response=True)
                     success_count += 1
                 except Exception as write_err:
                     _LOGGER.debug("FJX7: subscribe write failed at %d/%d: %s: %s", i+1, len(SUBSCRIBE_PARAMS), type(write_err).__name__, write_err)
