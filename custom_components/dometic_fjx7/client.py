@@ -128,6 +128,19 @@ class FJX7BLEClient:
             self._connected = True
             _LOGGER.info("FJX7: connected! services: %d", len(client.services.services))
 
+            # Log all services and characteristics for debugging
+            for svc in client.services:
+                _LOGGER.debug("FJX7: service: %s", svc.uuid)
+                for char in svc.characteristics:
+                    _LOGGER.debug("FJX7:   char: %s props=%s handle=0x%04x", char.uuid, char.properties, char.handle)
+
+            # Test: try a simple read first
+            try:
+                val = await client.read_gatt_char(NOTIFY_UUID)
+                _LOGGER.info("FJX7: test read OK: %s", val.hex() if val else "empty")
+            except Exception as read_err:
+                _LOGGER.debug("FJX7: test read failed: %s: %s", type(read_err).__name__, read_err)
+
             # Write subscribes BEFORE enabling notifications
             success_count = 0
             for i, param in enumerate(SUBSCRIBE_PARAMS):
