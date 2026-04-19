@@ -150,9 +150,27 @@ Alternatively, use any BLE scanner app on your phone (like nRF Connect) and look
 esphome run fjx7-bridge.yaml
 ```
 
-Select the USB port when prompted. The ESP32 will compile, flash, connect to WiFi, bond with the FJX7, and start reporting state.
+Select the USB port when prompted. The ESP32 will compile, flash, and connect to WiFi. It'll then start trying to connect to the FJX7 over BLE — but on first install the FJX7 won't be ready to bond yet. Proceed to step 5 before panicking about the logs.
 
-### 5. Add to Home Assistant
+### 5. Put the FJX7 into pairing mode (first time only)
+
+The FJX7 will only accept a new BLE bond when it's in pairing mode. If you've ever used the Dometic Climate app, the AC has bonded with your phone but nothing else — the ESP32 will be rejected on its first connection attempt.
+
+**To put the FJX7 into pairing mode:** on the ADBD control panel, press and hold the **+ and − buttons together for 3 seconds**. The tiny display will show **`BL`** when pairing mode is active.
+
+Then power-cycle the ESP32 (or press its reset button). In the ESPHome logs you should see it connect, bond, and subscribe to parameters:
+
+```
+[ble_client] Connected
+[dometic_fjx7] Bonding successful
+[dometic_fjx7] All parameters subscribed
+```
+
+Once bonded, the keys persist in the ESP32's flash and in the FJX7's own bond table. You won't need to do this again — the ESP32 will reconnect silently after power cycles, firmware updates, or the AC being switched off at the isolator.
+
+**Symptom if you skip this step:** ESPHome logs show `Connected` followed almost immediately by `Disconnected`, looping indefinitely. Put the FJX7 in pairing mode (`BL` on the display) and reset the ESP32.
+
+### 6. Add to Home Assistant
 
 Home Assistant should auto-discover the new ESPHome device. If not, go to Settings → Devices & Services → Add Integration → ESPHome, and enter the ESP32's IP address.
 
@@ -246,17 +264,16 @@ We'd be happy to test patched firmware if you'd like to address any of these. Op
 
 ## Troubleshooting
 
-**ESP32 won't connect to FJX7**
-- Close the Dometic Climate app — the FJX7 only accepts one connection
+**ESP32 won't connect to FJX7 / connects then disconnects in a loop**
+- **First check:** has the FJX7 been put into pairing mode? Hold + and − on the ADBD panel together for 3 seconds — the display should show `BL`. See step 5 above.
+- Close the Dometic Climate app on every phone in range — the FJX7 only accepts one connection at a time
 - Check the MAC address in your YAML matches your FJX7
 - Ensure the ESP32 is within BLE range (~10m, less through walls/metal)
+- If pairing mode doesn't help, power-cycle the FJX7 at the isolator and try again
+- Last resort: wipe the ESP32's NVS with `esphome clean fjx7-bridge.yaml` followed by a full re-flash, then redo step 5
 
 **Connection drops or watchdog resets**
 - The ESP32-S3 occasionally hits watchdog timeouts when BLE and WiFi are competing for radio time. The device recovers automatically. If it happens frequently, ensure good WiFi signal strength to reduce radio contention.
-
-**Bonding fails**
-- Delete the ESP32's NVS (full flash erase: `esphome run --device /dev/ttyUSB0 fjx7-bridge.yaml` with `esp_idf` framework erases NVS by default on first flash)
-- Power cycle the FJX7
 
 **State doesn't update in HA**
 - Check ESPHome logs: `esphome logs fjx7-bridge.yaml`
