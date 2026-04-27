@@ -34,6 +34,7 @@ No wiring to the FJX7 — communication is entirely wireless over BLE.
 | Board | Status | Notes |
 |-------|--------|-------|
 | ESP32-S3-DevKitC-1 (N16R8) | ✅ Confirmed | Recommended. Dual-core, plenty of RAM |
+| ESP32-S3 SuperMini | ✅ Confirmed | Tested over a long weekend, rock solid |
 | ESP32-C3 SuperMini | Untested | Single-core — may struggle with BLE+WiFi |
 | ESP32-C6 | Untested | BLE 5.3, dual-core — should work well |
 
