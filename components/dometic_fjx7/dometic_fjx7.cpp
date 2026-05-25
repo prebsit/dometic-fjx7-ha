@@ -39,7 +39,7 @@ void DometicFJX7::loop() {
     this->subscribed_ = false;
     this->subscribe_idx_ = 0;
     this->last_subscribe_send_ = millis();
-    ESP_LOGD(TAG, "Polling \xe2\x80\x94 re-subscribing all params");
+    ESP_LOGD(TAG, "Polling — re-subscribing all params");
   }
 }
 
@@ -49,7 +49,7 @@ void DometicFJX7::gattc_event_handler(esp_gattc_cb_event_t event,
   switch (event) {
     case ESP_GATTC_OPEN_EVT: {
       if (param->open.status == ESP_GATT_OK) {
-        ESP_LOGI(TAG, "Connected \xe2\x80\x94 requesting encryption");
+        ESP_LOGI(TAG, "Connected — requesting encryption");
         // Force bonding/encryption immediately
         esp_ble_set_encryption(this->parent()->get_remote_bda(), ESP_BLE_SEC_ENCRYPT_MITM);
       } else {
@@ -95,12 +95,14 @@ void DometicFJX7::gattc_event_handler(esp_gattc_cb_event_t event,
 
     case ESP_GATTC_REG_FOR_NOTIFY_EVT: {
       if (param->reg_for_notify.status == ESP_GATT_OK) {
-        ESP_LOGI(TAG, "Notification registration OK \xe2\x80\x94 starting subscribes");
+        ESP_LOGI(TAG, "Notification registration OK — starting subscribes");
+        // Encryption was requested in OPEN_EVT and completes during service discovery
+        // ESPHome auto-writes CCCD, so just start DDM subscribes
         this->subscribe_queue_ = {
             DDM_PARAM_POWER, DDM_PARAM_FAN_SPEED, DDM_PARAM_AC_MODE,
             DDM_PARAM_TARGET_TEMP, DDM_PARAM_INTERIOR_LIGHT,
             DDM_PARAM_FAN_SPEED_PCT, DDM_PARAM_MEASURED_TEMP,
-            DDM_PARAM_EXTERIOR_LIGHT};
+            DDM_PARAM_EXTERIOR_LIGHT, DDM_PARAM_SLEEP};
         this->subscribe_idx_ = 0;
         this->subscribed_ = false;
         this->last_subscribe_send_ = millis();
@@ -216,6 +218,9 @@ void DometicFJX7::handle_report_(const uint8_t *data, uint16_t length) {
       if (this->exterior_light_ != nullptr)
         this->exterior_light_->update_state(this->exterior_light_state_);
       break;
+    case DDM_PARAM_SLEEP:
+      this->sleep_active_ = (value != 0);
+      break;
     default:
       ESP_LOGD(TAG, "Unknown param 0x%02x = %u", param, value);
       break;
@@ -224,11 +229,12 @@ void DometicFJX7::handle_report_(const uint8_t *data, uint16_t length) {
   if (this->climate_ != nullptr &&
       (param == DDM_PARAM_POWER || param == DDM_PARAM_AC_MODE ||
        param == DDM_PARAM_FAN_SPEED || param == DDM_PARAM_TARGET_TEMP ||
-       param == DDM_PARAM_MEASURED_TEMP)) {
+       param == DDM_PARAM_MEASURED_TEMP || param == DDM_PARAM_SLEEP)) {
     this->climate_->update_state(
         this->power_, this->ac_mode_, this->fan_speed_,
         (float)this->target_temp_milli_ / 1000.0f,
-        (float)this->measured_temp_milli_ / 1000.0f);
+        (float)this->measured_temp_milli_ / 1000.0f,
+        this->sleep_active_);
   }
 }
 
@@ -255,12 +261,16 @@ climate::ClimateTraits DometicFJX7Climate::traits() {
       climate::CLIMATE_FAN_HIGH,
   });
   traits.set_supported_custom_fan_modes({"Turbo"});
+  traits.set_supported_presets({
+      climate::CLIMATE_PRESET_NONE,
+      climate::CLIMATE_PRESET_SLEEP,
+  });
   return traits;
 }
 
 void DometicFJX7Climate::update_state(bool power, uint32_t ac_mode,
                                        uint32_t fan_speed, float target_temp,
-                                       float current_temp) {
+                                       float current_temp, bool sleep_active) {
   if (!power) {
     this->mode = climate::CLIMATE_MODE_OFF;
   } else {
@@ -297,6 +307,8 @@ void DometicFJX7Climate::update_state(bool power, uint32_t ac_mode,
 
   this->target_temperature = target_temp;
   this->current_temperature = current_temp;
+  this->preset = sleep_active ? climate::CLIMATE_PRESET_SLEEP
+                              : climate::CLIMATE_PRESET_NONE;
   this->publish_state();
 }
 
@@ -341,6 +353,12 @@ void DometicFJX7Climate::control(const climate::ClimateCall &call) {
     }
   }
 
+  if (call.get_preset().has_value()) {
+    auto preset = *call.get_preset();
+    uint32_t sleep = (preset == climate::CLIMATE_PRESET_SLEEP) ? 1 : 0;
+    this->parent_->send_set_command(DDM_PARAM_SLEEP, sleep);
+  }
+
   if (call.get_target_temperature().has_value()) {
     uint32_t milli = (uint32_t)(*call.get_target_temperature() * 1000.0f);
     this->parent_->send_set_command(DDM_PARAM_TARGET_TEMP, milli);
@@ -370,7 +388,7 @@ void DometicFJX7Light::write_state(light::LightState *state) {
 }
 
 void DometicFJX7Light::update_state(bool on) {
-  // Record what the device told us \xe2\x80\x94 write_state() checks this to suppress echoes
+  // Record what the device told us — write_state() checks this to suppress echoes
   this->last_device_report_ = millis();
   this->last_device_state_ = on;
   if (this->light_state_ != nullptr) {

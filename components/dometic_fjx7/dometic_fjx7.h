@@ -28,6 +28,7 @@ static const uint8_t DDM_PARAM_INTERIOR_LIGHT = 0x05;
 static const uint8_t DDM_PARAM_FAN_SPEED_PCT = 0x06;
 static const uint8_t DDM_PARAM_MEASURED_TEMP = 0x0A;
 static const uint8_t DDM_PARAM_EXTERIOR_LIGHT = 0x0E;
+static const uint8_t DDM_PARAM_SLEEP = 0x1B;
 
 static const uint8_t DDM_GROUP_LO = 0x02;
 static const uint8_t DDM_GROUP_HI = 0x01;
@@ -87,6 +88,7 @@ class DometicFJX7 : public ble_client::BLEClientNode, public Component {
   uint32_t fan_speed_pct_{0};
   bool interior_light_state_{false};
   bool exterior_light_state_{false};
+  bool sleep_active_{false};
 
   DometicFJX7Climate *climate_{nullptr};
   DometicFJX7Light *interior_light_{nullptr};
@@ -107,7 +109,7 @@ class DometicFJX7Climate : public climate::Climate, public Component {
 
   climate::ClimateTraits traits() override;
   void update_state(bool power, uint32_t ac_mode, uint32_t fan_speed,
-                    float target_temp, float current_temp);
+                    float target_temp, float current_temp, bool sleep_active);
 
  protected:
   void control(const climate::ClimateCall &call) override;

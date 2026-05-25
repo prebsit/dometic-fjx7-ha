@@ -10,6 +10,7 @@ The first working Home Assistant integration for the Dometic FreshJet FJX7 roof-
 - **Fan speed** — Low, Medium, High, Turbo, Auto
 - **Temperature** — target and measured, 16–31°C
 - **Interior & exterior lights** — on/off control
+- **Sleep mode** — engage the FJX7's Sleep preset (moon icon, dimmed display, quiet low fan) via Home Assistant's `preset_mode` dropdown
 - **Instant sync** — state changes from the ADBD panel appear in HA immediately via BLE notifications
 - **Auto-reconnect** — ESP32 recovers from power cycles and disconnections automatically
 
@@ -244,6 +245,15 @@ Value 4 is not used.
 | 0x06 | R | Fan speed readback (0–100%) |
 | 0x0A | R | Measured temperature (millidegrees Celsius) |
 | 0x0E | R/W | Exterior light (0=off, 1=on) |
+| 0x1B | R/W | Sleep mode flag (0=off, 1=on). See Sleep Mode section below |
+
+### Sleep Mode (param 0x1B)
+
+The FJX7's Sleep mode is exposed via Home Assistant's `preset_mode: sleep`. Setting it writes `0x1B = 1` over BLE; the device lights the moon icon on the panel, dims the display, and forces `fan_speed` to Low. Setting preset back to `none` clears the flag, and the firmware automatically restores the previous `fan_speed` setting.
+
+**Firmware constraint:** Sleep mode requires a compressor-using HVAC mode. Confirmed working in Cool and Heat. The Dometic firmware silently rejects `0x1B = 1` writes when the unit is in Fan Only — the BLE write completes successfully (ATT write ack returned), but the device reports `0x1B = 0` in the follow-up notification. Dry and Heat/Cool not yet tested but likely supported on the same logic (any mode that runs the compressor). This is a state-machine-level gate, not just a UI restriction.
+
+If you specifically want Sleep behaviour in Fan Only mode (for off-grid quiet ventilation without battery-draining compressor cycles), a workaround is to set HVAC mode to Cool with target temperature 31°C and then engage Sleep. The compressor stays idle because the target is above measured temp, but you get the Sleep aesthetic — moon, dim, Low fan — that the firmware would otherwise reserve for compressor modes.
 
 ### BLE Connection Requirements
 
@@ -260,6 +270,8 @@ If you're from Dometic and reading this — hello. Here's what we found while re
 **3. Single BLE connection limit.** The FJX7 only accepts one BLE client at a time. If the Dometic app is connected, no other client can connect, and vice versa. This is worth documenting for users.
 
 **4. Fan speed value 4 is unused.** The fan speed parameter accepts values 0–3 and 5, but not 4. Sending 4 appears to default to Auto mode.
+
+**5. Sleep mode disabled in Fan Only.** The Sleep flag (parameter 0x1B) accepts writes via BLE but is silently rejected when the unit is in Fan Only mode. Sleep works correctly in Cool and Heat (compressor-using modes). Sleep would be useful in Fan Only too for off-grid motorhome scenarios — gentle nighttime ventilation without battery-draining compressor cycles is a relevant use case for the market the FJX7 targets.
 
 We'd be happy to test patched firmware if you'd like to address any of these. Open an issue on this repo.
 
