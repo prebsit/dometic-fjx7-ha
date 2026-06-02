@@ -189,10 +189,13 @@ The bond keys are stored in the ESP32's flash (NVS), so it reconnects automatica
 | Device | Protocol | Status |
 |--------|----------|--------|
 | FreshJet FJX7 | DDM over BLE | ✅ Fully working |
+| FreshJet FJX4 | DDM over BLE | ✅ Confirmed working (community-tested) |
 | FreshJet FJX5 | DDM over BLE | 🔮 Likely compatible (untested) |
 | FreshJet FJX3 | DDM over BLE | 🔮 Likely compatible (untested) |
 
 The DDM protocol is shared across Dometic's connected product range. If you have a different FJX model, please test and report back.
+
+**Units without an exterior light (e.g. FJX4):** the exterior light entity is harmless even if your unit doesn't have the hardware — the FJX7 component still creates it, but the device simply reports `0x0E = 0` and reading it causes no errors or beeping. You can either ignore the entity or disable it in Home Assistant. The interior light works normally.
 
 ## DDM Protocol Reference
 
