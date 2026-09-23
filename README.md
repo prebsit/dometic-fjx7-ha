@@ -1,6 +1,6 @@
-# Dometic FreshJet FJX7 — ESPHome Component for Home Assistant
+# Dometic FreshJet FJX / FJZ — ESPHome Component for Home Assistant
 
-The first working Home Assistant integration for the Dometic FreshJet FJX7 roof-mounted air conditioning unit. Full bidirectional control over BLE via an ESP32 bridge.
+The first working Home Assistant integration for the Dometic FreshJet FJX7 roof-mounted air conditioning unit — now also confirmed on the FJX4 and the newer FJZ7. Full bidirectional control over BLE via an ESP32 bridge.
 
 **No cloud. No Dometic app. No wiring.**
 
@@ -198,7 +198,7 @@ The bond keys are stored in the ESP32's flash (NVS), so it reconnects automatica
 | Device | Protocol | Status |
 |--------|----------|--------|
 | FreshJet FJX7 | DDM over BLE | ✅ Fully working |
-| FreshJet FJX4 | DDM over BLE | ✅ Confirmed working (community-tested) |
+| FreshJet FJX4 | DDM over BLE | ✅ Confirmed working (community-tested by Nige) |
 | FreshJet FJZ7 2200 | DDM over BLE | ✅ Confirmed working incl. Adaptive Power (community-tested, [@DRAKS1000](https://github.com/DRAKS1000)) |
 | FreshJet FJX5 | DDM over BLE | 🔮 Likely compatible (untested) |
 | FreshJet FJX3 | DDM over BLE | 🔮 Likely compatible (untested) |
@@ -325,11 +325,29 @@ We'd be happy to test patched firmware if you'd like to address any of these. Op
 
 PRs welcome. If you have a different Dometic connected product (FJX5, FJX3, or anything else using DDM), your testing would help expand support. The DDM protocol layer is shared across the range.
 
+## Changelog
+
+### v0.3.0
+- **FJZ support** — confirmed working on the FJZ7 2200 ([@DRAKS1000](https://github.com/DRAKS1000))
+- **Adaptive Power Mode** — new optional `select` to cap the unit's current draw (4/5/6/7 A or unlimited). Protocol sniffed by [@DRAKS1000](https://github.com/DRAKS1000). Opt-in: FJX users who don't add the select see no change
+- **ESPHome 2026.11 ready** — custom fan mode moved to the new API, with a fallback so older ESPHome still builds
+- **Fixes** — sub-zero measured temperatures now read correctly; target temperature clamped to 16–31 °C; unknown AC modes logged instead of silently showing Cool
+- **Quieter logs** — raw BLE hex dump moved to VERBOSE
+- **CI** — every push and a weekly run compile an FJX config and an FJZ config against several ESPHome versions
+
+### v0.2.0
+- Sleep preset mode
+
 ## Credits
 
 Protocol reverse-engineered and ESPHome component built by [@prebsit](https://github.com/prebsit) from a motorhome in Austria, Germany, France and UK, whilst the van's authority slept, April 2026.
 
 Built with [Claude](https://claude.ai) (Anthropic) as coding partner — Si provided the hardware, the van, and the button-pressing; Claude wrote the code.
+
+### Contributors
+
+- [@DRAKS1000](https://github.com/DRAKS1000) — FJZ7 2200 support, reverse-engineered Adaptive Power Mode (param 0x2D), ESPHome 2026.11 compatibility fix
+- Nige — first community confirmation on the FJX4
 
 ## Licence
 
