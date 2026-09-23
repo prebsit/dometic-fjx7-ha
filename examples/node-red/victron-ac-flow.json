@@ -47,14 +47,14 @@
     "x": 360,
     "y": 120,
     "name": "Route state",
-    "func": "// Routes ESPHome MQTT state from the Dometic bridge to the Victron virtual devices.\n// Learns the bridge's topic prefix (e.g. dometic/fjx7-bridge) from its status topic.\nconst t = msg.topic, p = String(msg.payload);\nconst m = t.match(/^(.*)\\/(status|climate\\/ac\\/[a-z_]+\\/state|sensor\\/[a-z_]+\\/state|select\\/adaptive_power\\/state)$/);\nif (!m) return null;\nconst base = m[1], leaf = m[2];\nflow.set('fjx7_base', base);\nconst MODES = ['cool','heat','heat_cool','fan_only','dry'];\nconst AP = ['4A','5A','6A','7A','Unlimited'];\nconst out = [null,null,null,null,null];\nswitch (leaf) {\n  case 'status':\n    node.status({fill: p === 'online' ? 'green' : 'red', shape:'dot', text: base + ': ' + p});\n    return null;\n  case 'climate/ac/mode/state': {\n    out[0] = {payload: {'SwitchableOutput/output_1/State': p === 'off' ? 0 : 1}};\n    const i = MODES.indexOf(p);\n    if (i >= 0) { flow.set('fjx7_last_mode', p); out[1] = {payload: {'SwitchableOutput/output_1/Dimming': i}}; }\n    break;\n  }\n  case 'climate/ac/target_temperature/state':\n    if (!isNaN(parseFloat(p))) out[2] = {payload: {'SwitchableOutput/output_1/Dimming': parseFloat(p)}};\n    break;\n  case 'climate/ac/current_temperature/state':\n    if (!isNaN(parseFloat(p))) out[2] = {payload: {'SwitchableOutput/output_1/Measurement': parseFloat(p)}};\n    break;\n  case 'sensor/temperature/state':\n    if (!isNaN(parseFloat(p))) out[4] = {payload: {'Temperature': parseFloat(p)}};\n    break;\n  case 'select/adaptive_power/state': {\n    const i = AP.indexOf(p);\n    if (i >= 0) out[3] = {payload: {'SwitchableOutput/output_1/Dimming': i}};\n    break;\n  }\n}\nreturn out;",
-    "outputs": 5,
+    "func": "// Routes ESPHome MQTT state from the Dometic bridge to the Victron virtual devices.\n// Learns the bridge's topic prefix (e.g. dometic/fjx7-bridge) from its status topic.\nconst t = msg.topic, p = String(msg.payload);\nconst m = t.match(/^(.*)\\/(status|climate\\/ac\\/[a-z_]+\\/state|select\\/adaptive_power\\/state)$/);\nif (!m) return null;\nconst base = m[1], leaf = m[2];\nflow.set('fjx7_base', base);\nconst MODES = ['cool','heat','heat_cool','fan_only','dry'];\nconst AP = ['4A','5A','6A','7A','Unlimited'];\nconst out = [null,null,null,null];\nswitch (leaf) {\n  case 'status':\n    node.status({fill: p === 'online' ? 'green' : 'red', shape:'dot', text: base + ': ' + p});\n    return null;\n  case 'climate/ac/mode/state': {\n    out[0] = {payload: {'SwitchableOutput/output_1/State': p === 'off' ? 0 : 1}};\n    const i = MODES.indexOf(p);\n    if (i >= 0) { flow.set('fjx7_last_mode', p); out[1] = {payload: {'SwitchableOutput/output_1/Dimming': i}}; }\n    break;\n  }\n  case 'climate/ac/target_temperature/state':\n    if (!isNaN(parseFloat(p))) out[2] = {payload: {'SwitchableOutput/output_1/Dimming': parseFloat(p)}};\n    break;\n  case 'climate/ac/current_temperature/state':\n    if (!isNaN(parseFloat(p))) out[2] = {payload: {'SwitchableOutput/output_1/Measurement': parseFloat(p)}};\n    break;\n  case 'select/adaptive_power/state': {\n    const i = AP.indexOf(p);\n    if (i >= 0) out[3] = {payload: {'SwitchableOutput/output_1/Dimming': i}};\n    break;\n  }\n}\nreturn out;",
+    "outputs": 4,
     "timeout": 0,
     "noerr": 0,
     "initialize": "",
     "finalize": "",
     "libs": [],
-    "wires": [["sw_power"], ["sw_mode"], ["sw_temp"], ["sw_ap"], ["temp_dev"]]
+    "wires": [["sw_power"], ["sw_mode"], ["sw_temp"], ["sw_ap"]]
   },
   {
     "id": "sw_power",
@@ -167,22 +167,6 @@
     "switch_1_value_3": "7A",
     "switch_1_value_4": "Unlimited",
     "wires": [[], ["c_ap"]]
-  },
-  {
-    "id": "temp_dev",
-    "type": "victron-virtual",
-    "z": "fjx7tab",
-    "x": 640,
-    "y": 300,
-    "name": "Cabin temperature",
-    "outputs": 1,
-    "device": "temperature",
-    "default_values": false,
-    "temperature_type": 3,
-    "include_humidity": false,
-    "include_pressure": false,
-    "include_temp_battery": false,
-    "wires": [[]]
   },
   {
     "id": "c_power",

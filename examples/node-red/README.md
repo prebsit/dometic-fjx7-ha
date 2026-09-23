@@ -9,13 +9,14 @@ virtual switches called **Aircon**:
 | AC mode | Dropdown | Cool / Heat / Auto / Fan / Dry |
 | AC target | Temperature setpoint | 16–31 °C, with the measured cabin temperature shown alongside |
 | AC power limit | Dropdown | Adaptive Power: 4A / 5A / 6A / 7A / Unlimited (needs `packages/adaptive_power.yaml`) |
-| Cabin temperature | Temperature sensor | Logged and graphed in VRM |
 
 Changes made on the AC's own panel or remote show up on the GX too.
 
-> **Status: untested on real hardware.** Written against
-> node-red-contrib-victron 1.7.27 source. If a Victron node looks wrong after
-> import, open it, re-select the switch type and deploy.
+> **Status:** tested on an Ekrano GX (Venus OS Large) with a simulated bridge:
+> all four controls register, show state, and send commands in both
+> directions. Not yet tested with a real bridge + AC. Written against
+> node-red-contrib-victron 1.7.27. If a Victron node looks wrong after import,
+> open it, re-select the switch type and deploy.
 
 ## Requirements
 
@@ -30,9 +31,9 @@ Changes made on the AC's own panel or remote show up on the GX too.
 **Option A: the GX's own broker (try this first).** Venus OS runs an MQTT
 broker on port 1883 when **Settings → Services → MQTT (plaintext)** is on.
 The flow is set up for this (`127.0.0.1:1883`, since Node-RED runs on the GX).
-Whether Venus accepts messages outside its own `N/`, `R/`, `W/` topics is
-**unverified**. If the flow's "Bridge state" node shows *connected* but nothing
-arrives, go to option B.
+Confirmed on an Ekrano GX: Venus's broker carries the bridge's `dometic/...`
+topics fine. If on your GX the flow's "Bridge state" node shows *connected*
+but nothing arrives, go to option B.
 
 **Option B: a broker inside Node-RED.** Install `node-red-contrib-aedes` from
 the palette (needs internet), drop an *Aedes MQTT broker* node on port **1884**,
