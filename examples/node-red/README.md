@@ -7,14 +7,18 @@ virtual switches called **Aircon**:
 |---|---|---|
 | AC power | Toggle | On (resumes the last mode, default Cool) / Off |
 | AC mode | Dropdown | Cool / Heat / Auto / Fan / Dry |
+| AC speed | Dropdown | Auto / Low / Medium / High / Turbo |
 | AC target | Temperature setpoint | 16–31 °C, with the measured cabin temperature shown alongside |
-| AC power limit | Dropdown | Adaptive Power: 4A / 5A / 6A / 7A / Unlimited (needs `packages/adaptive_power.yaml`) |
+| AC power limit | Dropdown | **FJZ only.** Adaptive Power: 4A / 5A / 6A / 7A / Unlimited (needs `packages/adaptive_power.yaml`) |
 
 Changes made on the AC's own panel or remote show up on the GX too.
 
-> **Status:** tested on an Ekrano GX (Venus OS Large) with a simulated bridge:
-> all four controls register, show state, and send commands in both
-> directions. Not yet tested with a real bridge + AC. Written against
+**FJX owners:** delete the *AC power limit* and *Limit -> command* nodes after
+importing. FJX units accept the setting but ignore it.
+
+> **Status:** tested in a motorhome on an Ekrano GX (Venus OS Large) with a
+> real FJX7: power, mode, speed (incl. Turbo) and target work in both
+> directions, from the GX screen and from VRM. Written against
 > node-red-contrib-victron 1.7.27. If a Victron node looks wrong after import,
 > open it, re-select the switch type and deploy.
 
@@ -43,10 +47,13 @@ change the flow's broker config to port 1884, and rebuild the bridge with
 ## Import
 
 1. Open Node-RED on the GX (via VRM → Venus OS Large, or `https://<gx-ip>:1881`).
-2. Menu → **Import** → paste `victron-ac-flow.json` → **Import** → **Deploy**.
+2. Menu → **Import** → **Clipboard** tab → paste `victron-ac-flow.json` → **Import** → **Deploy**.
 3. The **Route state** node shows the bridge's status (green = online).
 4. The Aircon group appears on the GX display. Switches may read 0 until the
    bridge publishes its first state.
+
+Updating the flow: delete the old **Dometic AC** tab and deploy before
+importing the new one, or you'll end up with two sets of switches.
 
 ## How it works
 
@@ -57,6 +64,11 @@ AC ⇄ BLE ⇄ ESP32 bridge ⇄ MQTT (dometic/<name>/…) ⇄ Node-RED ⇄ Victr
 The flow learns the bridge's topic prefix from its messages, so the bridge
 `name` doesn't need to match anything. Commands are only sent after the bridge
 has been seen at least once.
+
+Every change on the GX produces a state update from the AC, which moves the
+GX switch again. The flow ignores those echoes (and repeats of a command it
+sent in the last few seconds), so the GX and the AC can't ping-pong a
+setting back and forth.
 
 **Only one system should run automations for the AC.** If Home Assistant is
 also connected (`packages/ha.yaml`), let one of them own the logic and use the
