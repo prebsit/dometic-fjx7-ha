@@ -5,7 +5,7 @@ from esphome.const import CONF_ID
 
 CODEOWNERS = ["@prebsit"]
 DEPENDENCIES = ["ble_client"]
-AUTO_LOAD = ["climate", "sensor", "light"]
+AUTO_LOAD = ["climate", "sensor", "light", "select"]
 MULTI_CONF = False
 
 CONF_DOMETIC_FJX7_ID = "dometic_fjx7_id"

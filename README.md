@@ -10,6 +10,7 @@ The first working Home Assistant integration for the Dometic FreshJet FJX7 roof-
 - **Fan speed** — Low, Medium, High, Turbo, Auto
 - **Temperature** — target and measured, 16–31°C
 - **Interior & exterior lights** — on/off control
+- **Adaptive Power Mode** *(optional, FJZ-confirmed)* — cap the unit's current draw at 4/5/6/7 A or unlimited, so it can't trip a weak hookup. See [Adaptive Power Mode](#adaptive-power-mode-param-0x2d)
 - **Sleep mode** — engage the FJX7's Sleep preset (moon icon, dimmed display, quiet low fan) via Home Assistant's `preset_mode` dropdown
 - **Instant sync** — state changes from the ADBD panel appear in HA immediately via BLE notifications
 - **Auto-reconnect** — ESP32 recovers from power cycles and disconnections automatically
@@ -42,6 +43,8 @@ No wiring to the FJX7 — communication is entirely wireless over BLE.
 ## Installation
 
 ### 1. Install ESPHome
+
+**ESPHome compatibility:** the component builds on both sides of ESPHome's 2026.4 custom-fan-mode API change, including 2026.11+ where the old API is removed. If a new ESPHome release breaks the build, open an issue with the version and the compiler error.
 
 If you don't have ESPHome installed:
 
@@ -94,7 +97,7 @@ external_components:
   - source:
       type: git
       url: https://github.com/prebsit/dometic-fjx7-ha
-      ref: main
+      ref: main  # better: pin to a release tag so updates don't surprise you
     components: [dometic_fjx7]
 
 dometic_fjx7:
@@ -118,6 +121,12 @@ sensor:
       name: "FJX7 Temperature"
     fan_speed_percent:
       name: "FJX7 Fan Speed"
+
+# Optional — Adaptive Power Mode. Leave this out on FJX units until it's
+# confirmed on yours; without it the component never touches param 0x2D.
+# select:
+#   - platform: dometic_fjx7
+#     name: "Adaptive Power"
 
 button:
   - platform: restart
@@ -163,8 +172,8 @@ The FJX7 will only accept a new BLE bond when it's in pairing mode. If you've ev
 Then power-cycle the ESP32 (or press its reset button). In the ESPHome logs you should see it connect, bond, and subscribe to parameters:
 
 ```
-[ble_client] Connected
-[dometic_fjx7] Bonding successful
+[dometic_fjx7] Connected — requesting encryption
+[dometic_fjx7] Notification registration OK — starting subscribes
 [dometic_fjx7] All parameters subscribed
 ```
 
@@ -190,6 +199,7 @@ The bond keys are stored in the ESP32's flash (NVS), so it reconnects automatica
 |--------|----------|--------|
 | FreshJet FJX7 | DDM over BLE | ✅ Fully working |
 | FreshJet FJX4 | DDM over BLE | ✅ Confirmed working (community-tested) |
+| FreshJet FJZ7 2200 | DDM over BLE | ✅ Confirmed working incl. Adaptive Power (community-tested, [@DRAKS1000](https://github.com/DRAKS1000)) |
 | FreshJet FJX5 | DDM over BLE | 🔮 Likely compatible (untested) |
 | FreshJet FJX3 | DDM over BLE | 🔮 Likely compatible (untested) |
 
@@ -257,6 +267,22 @@ The FJX7's Sleep mode is exposed via Home Assistant's `preset_mode: sleep`. Sett
 **Firmware constraint:** Sleep mode requires a compressor-using HVAC mode. Confirmed working in Cool and Heat. The Dometic firmware silently rejects `0x1B = 1` writes when the unit is in Fan Only — the BLE write completes successfully (ATT write ack returned), but the device reports `0x1B = 0` in the follow-up notification. Dry and Heat/Cool not yet tested but likely supported on the same logic (any mode that runs the compressor). This is a state-machine-level gate, not just a UI restriction.
 
 If you specifically want Sleep behaviour in Fan Only mode (for off-grid quiet ventilation without battery-draining compressor cycles), a workaround is to set HVAC mode to Cool with target temperature 31°C and then engage Sleep. The compressor stays idle because the target is above measured temp, but you get the Sleep aesthetic — moon, dim, Low fan — that the firmware would otherwise reserve for compressor modes.
+
+### Adaptive Power Mode (param 0x2D)
+
+Limits how much current the unit draws from hookup or the inverter. Sniffed on an FJZ7 2200 by [@DRAKS1000](https://github.com/DRAKS1000) (PR #6).
+
+| Value | Limit |
+|-------|-------|
+| 0 | 4 A |
+| 1 | 5 A |
+| 2 | 6 A |
+| 3 | 7 A |
+| 7 | Unlimited |
+
+Values 4–6 are reserved and not exposed — possibly used on higher-current models. If your unit reports one, the log shows `Adaptive Power: received unknown raw value N`; please open an issue with the value and your model.
+
+**Opt-in:** the component only subscribes to 0x2D when you configure the `select` platform. Not yet confirmed on FJX-series units — if you try it on an FJX, please report back either way.
 
 ### BLE Connection Requirements
 

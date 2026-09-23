@@ -2,14 +2,13 @@ import esphome.codegen as cg
 from esphome.components import sensor
 import esphome.config_validation as cv
 from esphome.const import (
-    CONF_ID,
     DEVICE_CLASS_TEMPERATURE,
     STATE_CLASS_MEASUREMENT,
     UNIT_CELSIUS,
     UNIT_PERCENT,
 )
 
-from .. import CONF_DOMETIC_FJX7_ID, FJX7_CLIENT_SCHEMA, dometic_fjx7_ns, register_fjx7_child
+from .. import CONF_DOMETIC_FJX7_ID, FJX7_CLIENT_SCHEMA
 
 DEPENDENCIES = ["dometic_fjx7"]
 

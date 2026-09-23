@@ -1,6 +1,7 @@
 #include "dometic_fjx7.h"
 #include "esphome/core/log.h"
 #include <esp_gap_ble_api.h>
+#include <cmath>
 
 namespace esphome {
 namespace dometic_fjx7 {
@@ -102,8 +103,11 @@ void DometicFJX7::gattc_event_handler(esp_gattc_cb_event_t event,
             DDM_PARAM_POWER, DDM_PARAM_FAN_SPEED, DDM_PARAM_AC_MODE,
             DDM_PARAM_TARGET_TEMP, DDM_PARAM_INTERIOR_LIGHT,
             DDM_PARAM_FAN_SPEED_PCT, DDM_PARAM_MEASURED_TEMP,
-            DDM_PARAM_EXTERIOR_LIGHT, DDM_PARAM_SLEEP,
-            DDM_PARAM_ADAPTIVE_POWER};
+            DDM_PARAM_EXTERIOR_LIGHT, DDM_PARAM_SLEEP};
+        // Adaptive Power (0x2D) is FJZ-confirmed only. Opt-in so FJX users who
+        // don't configure the select see exactly the same BLE traffic as before.
+        if (this->adaptive_power_select_ != nullptr)
+          this->subscribe_queue_.push_back(DDM_PARAM_ADAPTIVE_POWER);
         this->subscribe_idx_ = 0;
         this->subscribed_ = false;
         this->last_subscribe_send_ = millis();
@@ -125,7 +129,7 @@ void DometicFJX7::gattc_event_handler(esp_gattc_cb_event_t event,
         ESP_LOGW(TAG, "Write FAILED, handle=0x%04x status=%d",
                  param->write.handle, param->write.status);
       } else {
-        ESP_LOGI(TAG, "Write OK, handle=0x%04x", param->write.handle);
+        ESP_LOGD(TAG, "Write OK, handle=0x%04x", param->write.handle);
       }
       break;
     }
@@ -163,7 +167,7 @@ void DometicFJX7::send_set_command(uint8_t param, uint32_t value) {
       DDM_CMD_SET, param, 0x00, DDM_GROUP_LO, DDM_GROUP_HI,
       (uint8_t)(value & 0xFF), (uint8_t)((value >> 8) & 0xFF),
       (uint8_t)((value >> 16) & 0xFF), (uint8_t)((value >> 24) & 0xFF)};
-  ESP_LOGI(TAG, "Set param 0x%02x = %u", param, value);
+  ESP_LOGI(TAG, "Set param 0x%02x = %" PRIu32, param, value);
   esp_ble_gattc_write_char(
       this->parent()->get_gattc_if(), this->parent()->get_conn_id(),
       this->write_handle_, sizeof(data), data,
@@ -171,20 +175,24 @@ void DometicFJX7::send_set_command(uint8_t param, uint32_t value) {
 }
 
 void DometicFJX7::handle_report_(const uint8_t *data, uint16_t length) {
-  // Hex dump raw notification
+#if ESPHOME_LOG_LEVEL >= ESPHOME_LOG_LEVEL_VERBOSE
+  // Hex dump raw notification (first 20 bytes; 20*3 + NUL fits in 64)
   char hex[64] = {0};
   for (uint16_t i = 0; i < length && i < 20; i++) {
-    sprintf(hex + i * 3, "%02x ", data[i]);
+    snprintf(hex + i * 3, sizeof(hex) - i * 3, "%02x ", data[i]);
   }
-  ESP_LOGI(TAG, "Notify raw [%d]: %s", length, hex);
+  ESP_LOGV(TAG, "Notify raw [%u]: %s", (unsigned) length, hex);
+#endif
 
   if (length < 9 || data[0] != DDM_CMD_REPORT) {
     ESP_LOGW(TAG, "Invalid report: len=%d cmd=0x%02x", length, length > 0 ? data[0] : 0);
     return;
   }
   uint8_t param = data[1];
-  uint32_t value = data[5] | (data[6] << 8) | (data[7] << 16) | (data[8] << 24);
-  ESP_LOGD(TAG, "Report: param=0x%02x value=%u", param, value);
+  // Cast before shifting: data[8] << 24 on a promoted int is UB when bit 7 is set
+  uint32_t value = (uint32_t) data[5] | ((uint32_t) data[6] << 8) |
+                   ((uint32_t) data[7] << 16) | ((uint32_t) data[8] << 24);
+  ESP_LOGD(TAG, "Report: param=0x%02x value=%" PRIu32, param, value);
 
   switch (param) {
     case DDM_PARAM_POWER:
@@ -200,9 +208,10 @@ void DometicFJX7::handle_report_(const uint8_t *data, uint16_t length) {
       this->target_temp_milli_ = value;
       break;
     case DDM_PARAM_MEASURED_TEMP:
-      this->measured_temp_milli_ = value;
+      // Two's complement: identical for positive temps, correct below 0 C
+      this->measured_temp_milli_ = (int32_t) value;
       if (this->measured_temp_sensor_ != nullptr)
-        this->measured_temp_sensor_->publish_state((float)value / 1000.0f);
+        this->measured_temp_sensor_->publish_state((float) this->measured_temp_milli_ / 1000.0f);
       break;
     case DDM_PARAM_FAN_SPEED_PCT:
       this->fan_speed_pct_ = value;
@@ -228,7 +237,7 @@ void DometicFJX7::handle_report_(const uint8_t *data, uint16_t length) {
         this->adaptive_power_select_->update_state(value);
       break;
     default:
-      ESP_LOGD(TAG, "Unknown param 0x%02x = %u", param, value);
+      ESP_LOGD(TAG, "Unknown param 0x%02x = %" PRIu32, param, value);
       break;
   }
 
@@ -246,13 +255,16 @@ void DometicFJX7::handle_report_(const uint8_t *data, uint16_t length) {
 
 // ---- Climate ----
 
+#if ESPHOME_VERSION_CODE >= VERSION_CODE(2026, 4, 0)
+static const char *const CUSTOM_FAN_MODES[] = {"Turbo"};
+#endif
+
 void DometicFJX7Climate::setup() {
-  // ESPHome 2026.4+: custom fan modes are now set directly on the entity
-  // (once, here in setup()) instead of on the ClimateTraits object returned
-  // by traits() on every call — the old traits.set_supported_custom_fan_modes()
-  // is deprecated and slated for removal in 2026.11.0.
-  static const char *const CUSTOM_FAN_MODES[] = {"Turbo"};
+#if ESPHOME_VERSION_CODE >= VERSION_CODE(2026, 4, 0)
+  // ESPHome 2026.4+: custom fan modes live on the entity. The traits-level
+  // setter is deprecated since 2026.5 and removed in 2026.11.
   this->set_supported_custom_fan_modes(CUSTOM_FAN_MODES);
+#endif
 }
 
 climate::ClimateTraits DometicFJX7Climate::traits() {
@@ -275,6 +287,11 @@ climate::ClimateTraits DometicFJX7Climate::traits() {
       climate::CLIMATE_FAN_MEDIUM,
       climate::CLIMATE_FAN_HIGH,
   });
+#if ESPHOME_VERSION_CODE < VERSION_CODE(2026, 4, 0)
+  // Older ESPHome: entity-level setter doesn't exist yet. Kept byte-identical
+  // to v0.2.0 so anyone pinned to an older ESPHome still compiles.
+  traits.set_supported_custom_fan_modes({"Turbo"});
+#endif
   traits.set_supported_presets({
       climate::CLIMATE_PRESET_NONE,
       climate::CLIMATE_PRESET_SLEEP,
@@ -294,7 +311,10 @@ void DometicFJX7Climate::update_state(bool power, uint32_t ac_mode,
       case AC_MODE_AUTO: this->mode = climate::CLIMATE_MODE_HEAT_COOL; break;
       case AC_MODE_FAN_ONLY: this->mode = climate::CLIMATE_MODE_FAN_ONLY; break;
       case AC_MODE_DRY: this->mode = climate::CLIMATE_MODE_DRY; break;
-      default: this->mode = climate::CLIMATE_MODE_COOL; break;
+      default:
+        ESP_LOGW(TAG, "Unknown AC mode %" PRIu32 ", showing as Cool", ac_mode);
+        this->mode = climate::CLIMATE_MODE_COOL;
+        break;
     }
   }
 
@@ -374,7 +394,12 @@ void DometicFJX7Climate::control(const climate::ClimateCall &call) {
   }
 
   if (call.get_target_temperature().has_value()) {
-    uint32_t milli = (uint32_t)(*call.get_target_temperature() * 1000.0f);
+    // Clamp: HA/MQTT callers aren't bound by the visual range, and casting a
+    // negative float to uint32_t is undefined behaviour.
+    float t = *call.get_target_temperature();
+    if (t < TARGET_TEMP_MIN) t = TARGET_TEMP_MIN;
+    if (t > TARGET_TEMP_MAX) t = TARGET_TEMP_MAX;
+    uint32_t milli = (uint32_t) std::lround(t * 1000.0f);
     this->parent_->send_set_command(DDM_PARAM_TARGET_TEMP, milli);
   }
 }
@@ -432,7 +457,7 @@ void DometicFJX7Select::update_state(uint32_t value) {
       return;
     }
   }
-  ESP_LOGW(TAG, "Adaptive Power: received unknown raw value %u", value);
+  ESP_LOGW(TAG, "Adaptive Power: received unknown raw value %" PRIu32, value);
 }
 
 }  // namespace dometic_fjx7

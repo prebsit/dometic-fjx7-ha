@@ -1,6 +1,7 @@
 #pragma once
 
 #include "esphome/core/component.h"
+#include "esphome/core/version.h"
 #include "esphome/components/ble_client/ble_client.h"
 #include "esphome/components/esp32_ble/ble_uuid.h"
 #include "esphome/components/climate/climate.h"
@@ -9,6 +10,7 @@
 #include "esphome/components/light/light_state.h"
 #include "esphome/components/sensor/sensor.h"
 #include "esphome/components/select/select.h"
+#include <cinttypes>
 #include <vector>
 
 namespace esphome {
@@ -47,10 +49,16 @@ static const uint32_t FAN_HIGH = 2;
 static const uint32_t FAN_TURBO = 3;
 static const uint32_t FAN_AUTO = 5;
 
-// Adaptive Power Mode raw values, indexed identically to the option strings
-// exposed in select/__init__.py ("4A", "5A", "6A", "7A", "Unlimited").
-// Values 4/5/6 are reserved (not used on FJX7 2200; possibly used on
-// higher-current models like 2600/3500) and are intentionally not exposed.
+// Target temperature range accepted by the unit (matches the ADBD panel).
+static const float TARGET_TEMP_MIN = 16.0f;
+static const float TARGET_TEMP_MAX = 31.0f;
+
+// Adaptive Power Mode (param 0x2D) raw values, indexed identically to the
+// option strings exposed in select/__init__.py ("4A", "5A", "6A", "7A",
+// "Unlimited"). Sniffed on an FJZ7 2200 (PR #6). Values 4/5/6 are reserved
+// (possibly used on higher-current models) and are not exposed.
+// Not yet confirmed on FJX-series units, so the parameter is only
+// subscribed to when the adaptive_power select is configured in YAML.
 static const uint32_t ADAPTIVE_POWER_VALUES[] = {0, 1, 2, 3, 7};
 static const size_t ADAPTIVE_POWER_COUNT = 5;
 
@@ -95,7 +103,7 @@ class DometicFJX7 : public ble_client::BLEClientNode, public Component {
   uint32_t fan_speed_{0};
   uint32_t ac_mode_{0};
   uint32_t target_temp_milli_{22000};
-  uint32_t measured_temp_milli_{0};
+  int32_t measured_temp_milli_{0};  // signed: cabin can be below 0 C
   uint32_t fan_speed_pct_{0};
   bool interior_light_state_{false};
   bool exterior_light_state_{false};
