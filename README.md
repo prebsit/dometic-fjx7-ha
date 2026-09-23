@@ -10,7 +10,7 @@ The first working Home Assistant integration for the Dometic FreshJet FJX7 roof-
 - **Fan speed** — Low, Medium, High, Turbo, Auto
 - **Temperature** — target and measured, 16–31°C
 - **Interior & exterior lights** — on/off control
-- **Adaptive Power Mode** *(optional, FJZ-confirmed)* — cap the unit's current draw at 4/5/6/7 A or unlimited, so it can't trip a weak hookup. See [Adaptive Power Mode](#adaptive-power-mode-param-0x2d)
+- **Adaptive Power Mode** *(optional, FJZ only)* — cap the unit's current draw at 4/5/6/7 A or unlimited, so it can't trip a weak hookup. See [Adaptive Power Mode](#adaptive-power-mode-param-0x2d)
 - **Sleep mode** — engage the FJX7's Sleep preset (moon icon, dimmed display, quiet low fan) via Home Assistant's `preset_mode` dropdown
 - **Instant sync** — state changes from the ADBD panel appear in HA immediately via BLE notifications
 - **Auto-reconnect** — ESP32 recovers from power cycles and disconnections automatically
@@ -122,8 +122,8 @@ sensor:
     fan_speed_percent:
       name: "FJX7 Fan Speed"
 
-# Optional — Adaptive Power Mode. Leave this out on FJX units until it's
-# confirmed on yours; without it the component never touches param 0x2D.
+# Optional — Adaptive Power Mode. FJZ only: FJX units accept the setting but
+# ignore it. Without this the component never touches param 0x2D.
 # select:
 #   - platform: dometic_fjx7
 #     name: "Adaptive Power"
@@ -197,7 +197,7 @@ The bond keys are stored in the ESP32's flash (NVS), so it reconnects automatica
 
 | Device | Protocol | Status |
 |--------|----------|--------|
-| FreshJet FJX7 | DDM over BLE | ✅ Fully working |
+| FreshJet FJX7 | DDM over BLE | ✅ Fully working (Adaptive Power not supported) |
 | FreshJet FJX4 | DDM over BLE | ✅ Confirmed working (community-tested by Nige) |
 | FreshJet FJZ7 2200 | DDM over BLE | ✅ Confirmed working incl. Adaptive Power (community-tested, [@DRAKS1000](https://github.com/DRAKS1000)) |
 | FreshJet FJX5 | DDM over BLE | 🔮 Likely compatible (untested) |
@@ -282,7 +282,9 @@ Limits how much current the unit draws from hookup or the inverter. Sniffed on a
 
 Values 4–6 are reserved and not exposed — possibly used on higher-current models. If your unit reports one, the log shows `Adaptive Power: received unknown raw value N`; please open an issue with the value and your model.
 
-**Opt-in:** the component only subscribes to 0x2D when you configure the `select` platform. Not yet confirmed on FJX-series units — if you try it on an FJX, please report back either way.
+**Opt-in:** the component only subscribes to 0x2D when you configure the `select` platform.
+
+**FJZ only.** Tested on an FJX7 (September 2026): the unit accepts the write (one beep, `Write OK` in the log) but never reports 0x2D back, and the current draw doesn't change. Leave the `select` out on FJX units.
 
 ### BLE Connection Requirements
 
@@ -334,6 +336,7 @@ PRs welcome. If you have a different Dometic connected product (FJX5, FJX3, or a
 - **Fixes** — sub-zero measured temperatures now read correctly; target temperature clamped to 16–31 °C; unknown AC modes logged instead of silently showing Cool
 - **Quieter logs** — raw BLE hex dump moved to VERBOSE
 - **CI** — every push and a weekly run compile an FJX config and an FJZ config against several ESPHome versions
+- **Hardware-tested on an FJX7** — full control confirmed in the van; Adaptive Power confirmed FJZ-only
 
 ### v0.2.0
 - Sleep preset mode
