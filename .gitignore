@@ -1,0 +1,14 @@
+# ESPHome build caches (created wherever you run esphome config/compile)
+.esphome/
+**/.esphome/
+
+# Never commit secrets
+secrets.yaml
+**/secrets.yaml
+
+# Python
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
