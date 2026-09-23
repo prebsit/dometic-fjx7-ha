@@ -8,6 +8,7 @@
 #include "esphome/components/light/light_output.h"
 #include "esphome/components/light/light_state.h"
 #include "esphome/components/sensor/sensor.h"
+#include "esphome/components/select/select.h"
 #include <vector>
 
 namespace esphome {
@@ -29,6 +30,7 @@ static const uint8_t DDM_PARAM_FAN_SPEED_PCT = 0x06;
 static const uint8_t DDM_PARAM_MEASURED_TEMP = 0x0A;
 static const uint8_t DDM_PARAM_EXTERIOR_LIGHT = 0x0E;
 static const uint8_t DDM_PARAM_SLEEP = 0x1B;
+static const uint8_t DDM_PARAM_ADAPTIVE_POWER = 0x2D;
 
 static const uint8_t DDM_GROUP_LO = 0x02;
 static const uint8_t DDM_GROUP_HI = 0x01;
@@ -45,6 +47,13 @@ static const uint32_t FAN_HIGH = 2;
 static const uint32_t FAN_TURBO = 3;
 static const uint32_t FAN_AUTO = 5;
 
+// Adaptive Power Mode raw values, indexed identically to the option strings
+// exposed in select/__init__.py ("4A", "5A", "6A", "7A", "Unlimited").
+// Values 4/5/6 are reserved (not used on FJX7 2200; possibly used on
+// higher-current models like 2600/3500) and are intentionally not exposed.
+static const uint32_t ADAPTIVE_POWER_VALUES[] = {0, 1, 2, 3, 7};
+static const size_t ADAPTIVE_POWER_COUNT = 5;
+
 static const ESPBTUUID SERVICE_UUID =
     ESPBTUUID::from_raw("537a0400-0995-481f-926c-1604e23fd515");
 static const ESPBTUUID WRITE_CHAR_UUID =
@@ -54,6 +63,7 @@ static const ESPBTUUID NOTIFY_CHAR_UUID =
 
 class DometicFJX7Climate;
 class DometicFJX7Light;
+class DometicFJX7Select;
 
 class DometicFJX7 : public ble_client::BLEClientNode, public Component {
  public:
@@ -69,6 +79,7 @@ class DometicFJX7 : public ble_client::BLEClientNode, public Component {
   void set_exterior_light(DometicFJX7Light *light) { this->exterior_light_ = light; }
   void set_measured_temp_sensor(sensor::Sensor *sensor) { this->measured_temp_sensor_ = sensor; }
   void set_fan_speed_pct_sensor(sensor::Sensor *sensor) { this->fan_speed_pct_sensor_ = sensor; }
+  void set_adaptive_power_select(DometicFJX7Select *select) { this->adaptive_power_select_ = select; }
 
   void send_set_command(uint8_t param, uint32_t value);
 
@@ -89,12 +100,14 @@ class DometicFJX7 : public ble_client::BLEClientNode, public Component {
   bool interior_light_state_{false};
   bool exterior_light_state_{false};
   bool sleep_active_{false};
+  uint32_t adaptive_power_{0};
 
   DometicFJX7Climate *climate_{nullptr};
   DometicFJX7Light *interior_light_{nullptr};
   DometicFJX7Light *exterior_light_{nullptr};
   sensor::Sensor *measured_temp_sensor_{nullptr};
   sensor::Sensor *fan_speed_pct_sensor_{nullptr};
+  DometicFJX7Select *adaptive_power_select_{nullptr};
 
   std::vector<uint8_t> subscribe_queue_;
   uint8_t subscribe_idx_{0};
@@ -104,7 +117,7 @@ class DometicFJX7 : public ble_client::BLEClientNode, public Component {
 
 class DometicFJX7Climate : public climate::Climate, public Component {
  public:
-  void setup() override {}
+  void setup() override;
   void set_parent(DometicFJX7 *parent) { this->parent_ = parent; }
 
   climate::ClimateTraits traits() override;
@@ -132,6 +145,23 @@ class DometicFJX7Light : public light::LightOutput, public Component {
   light::LightState *light_state_{nullptr};
   uint32_t last_device_report_{0};
   bool last_device_state_{false};
+};
+
+class DometicFJX7Select : public select::Select, public Component {
+ public:
+  void setup() override {}
+  void set_parent(DometicFJX7 *parent) { this->parent_ = parent; }
+
+  // Called from DometicFJX7::handle_report_ when the device reports its
+  // current Adaptive Power Mode raw value (0/1/2/3/7). Maps it back to the
+  // matching option index and publishes it — this is the only place that
+  // updates the visible HA state, so the UI always reflects device-confirmed
+  // state rather than what was merely requested.
+  void update_state(uint32_t value);
+
+ protected:
+  void control(size_t index) override;
+  DometicFJX7 *parent_{nullptr};
 };
 
 }  // namespace dometic_fjx7

@@ -102,7 +102,8 @@ void DometicFJX7::gattc_event_handler(esp_gattc_cb_event_t event,
             DDM_PARAM_POWER, DDM_PARAM_FAN_SPEED, DDM_PARAM_AC_MODE,
             DDM_PARAM_TARGET_TEMP, DDM_PARAM_INTERIOR_LIGHT,
             DDM_PARAM_FAN_SPEED_PCT, DDM_PARAM_MEASURED_TEMP,
-            DDM_PARAM_EXTERIOR_LIGHT, DDM_PARAM_SLEEP};
+            DDM_PARAM_EXTERIOR_LIGHT, DDM_PARAM_SLEEP,
+            DDM_PARAM_ADAPTIVE_POWER};
         this->subscribe_idx_ = 0;
         this->subscribed_ = false;
         this->last_subscribe_send_ = millis();
@@ -221,6 +222,11 @@ void DometicFJX7::handle_report_(const uint8_t *data, uint16_t length) {
     case DDM_PARAM_SLEEP:
       this->sleep_active_ = (value != 0);
       break;
+    case DDM_PARAM_ADAPTIVE_POWER:
+      this->adaptive_power_ = value;
+      if (this->adaptive_power_select_ != nullptr)
+        this->adaptive_power_select_->update_state(value);
+      break;
     default:
       ESP_LOGD(TAG, "Unknown param 0x%02x = %u", param, value);
       break;
@@ -239,6 +245,15 @@ void DometicFJX7::handle_report_(const uint8_t *data, uint16_t length) {
 }
 
 // ---- Climate ----
+
+void DometicFJX7Climate::setup() {
+  // ESPHome 2026.4+: custom fan modes are now set directly on the entity
+  // (once, here in setup()) instead of on the ClimateTraits object returned
+  // by traits() on every call — the old traits.set_supported_custom_fan_modes()
+  // is deprecated and slated for removal in 2026.11.0.
+  static const char *const CUSTOM_FAN_MODES[] = {"Turbo"};
+  this->set_supported_custom_fan_modes(CUSTOM_FAN_MODES);
+}
 
 climate::ClimateTraits DometicFJX7Climate::traits() {
   auto traits = climate::ClimateTraits();
@@ -260,7 +275,6 @@ climate::ClimateTraits DometicFJX7Climate::traits() {
       climate::CLIMATE_FAN_MEDIUM,
       climate::CLIMATE_FAN_HIGH,
   });
-  traits.set_supported_custom_fan_modes({"Turbo"});
   traits.set_supported_presets({
       climate::CLIMATE_PRESET_NONE,
       climate::CLIMATE_PRESET_SLEEP,
@@ -395,6 +409,30 @@ void DometicFJX7Light::update_state(bool on) {
     auto call = on ? this->light_state_->turn_on() : this->light_state_->turn_off();
     call.perform();
   }
+}
+
+// ---- Adaptive Power Select ----
+
+void DometicFJX7Select::control(size_t index) {
+  if (this->parent_ == nullptr) return;
+  if (index >= ADAPTIVE_POWER_COUNT) {
+    ESP_LOGW(TAG, "Adaptive Power: index %u out of range", (unsigned)index);
+    return;
+  }
+  this->parent_->send_set_command(DDM_PARAM_ADAPTIVE_POWER, ADAPTIVE_POWER_VALUES[index]);
+  // No optimistic publish_state() here — we wait for the device's own report
+  // (DDM_PARAM_ADAPTIVE_POWER in handle_report_) to confirm the change, same
+  // pattern as the lights' echo-suppression logic above.
+}
+
+void DometicFJX7Select::update_state(uint32_t value) {
+  for (size_t i = 0; i < ADAPTIVE_POWER_COUNT; i++) {
+    if (ADAPTIVE_POWER_VALUES[i] == value) {
+      this->publish_state(i);
+      return;
+    }
+  }
+  ESP_LOGW(TAG, "Adaptive Power: received unknown raw value %u", value);
 }
 
 }  // namespace dometic_fjx7
