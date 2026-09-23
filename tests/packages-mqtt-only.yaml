@@ -1,0 +1,16 @@
+# CI build: MQTT only, no Home Assistant API (the Victron / Node-RED setup).
+# fjx7_ref is overridden on the command line with the commit being tested.
+substitutions:
+  name: ci-packages-mqtt
+  ac_mac: "00:00:00:00:00:00"
+  # Public CI-only key (ESPHome rejects all-zeros). NEVER use on a device.
+  encryption_key: "hh099O86RNsj3RKMWZo4y8f9JOWwltp3Z7lXl6NqnwM="
+  mqtt_broker: 192.0.2.1
+
+wifi:
+  ssid: "ci"
+  password: "ci-password"
+
+packages:
+  core: !include ../packages/core.yaml
+  mqtt: !include ../packages/mqtt.yaml

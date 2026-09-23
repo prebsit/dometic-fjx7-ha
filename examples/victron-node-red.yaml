@@ -1,0 +1,36 @@
+# Dometic FJX/FJZ bridge — MQTT (Node-RED on a Victron GX, or any broker)
+#
+# Add packages/ha.yaml to the list too if you ALSO want Home Assistant.
+# Only ONE system should run automations for the AC; the other just displays.
+#
+# secrets.yaml next to this file needs:
+#   wifi_ssid, wifi_password
+#   encryption_key   (generate with: openssl rand -base64 32)
+
+substitutions:
+  name: fjx7-bridge
+  friendly_name: "Dometic AC Bridge"
+  board: esp32-s3-devkitm-1
+  ac_mac: "XX:XX:XX:XX:XX:XX"
+  encryption_key: !secret encryption_key
+  mqtt_broker: 192.168.1.10          # your broker (e.g. the GX device's IP)
+  # mqtt_username: ""
+  # mqtt_password: ""
+  fjx7_ref: v0.4.0                   # keep in step with `ref:` below
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+captive_portal:
+
+packages:
+  fjx7:
+    url: https://github.com/prebsit/dometic-fjx7-ha
+    ref: v0.4.0
+    files:
+      - packages/core.yaml
+      - packages/mqtt.yaml
+      # - packages/ha.yaml
+      # - packages/adaptive_power.yaml
+    refresh: 1d

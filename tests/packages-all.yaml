@@ -1,0 +1,18 @@
+# CI build: every package at once (the "board in a box" firmware).
+# fjx7_ref is overridden on the command line with the commit being tested.
+substitutions:
+  name: ci-packages-all
+  ac_mac: "00:00:00:00:00:00"
+  # Public CI-only key (ESPHome rejects all-zeros). NEVER use on a device.
+  encryption_key: "hh099O86RNsj3RKMWZo4y8f9JOWwltp3Z7lXl6NqnwM="
+  mqtt_broker: 192.0.2.1
+
+wifi:
+  ssid: "ci"
+  password: "ci-password"
+
+packages:
+  core: !include ../packages/core.yaml
+  ha: !include ../packages/ha.yaml
+  mqtt: !include ../packages/mqtt.yaml
+  adaptive_power: !include ../packages/adaptive_power.yaml

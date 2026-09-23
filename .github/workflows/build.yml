@@ -41,3 +41,33 @@ jobs:
           key: pio-${{ matrix.esphome }}-${{ hashFiles('tests/*.yaml') }}
       - name: Compile
         run: esphome compile tests/${{ matrix.config }}.yaml
+
+  # The packages/ building blocks (need ESPHome 2026.9+ for encrypted OTA).
+  # core.yaml pulls the component from GitHub at ${fjx7_ref}; point it at the
+  # commit under test so the packages and the component are built together.
+  packages:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        esphome: ["latest", "dev"]
+        config: ["packages-all", "packages-mqtt-only"]
+    continue-on-error: ${{ matrix.esphome == 'dev' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Install ESPHome
+        run: |
+          case "${{ matrix.esphome }}" in
+            latest) pip install esphome ;;
+            dev)    pip install "esphome @ git+https://github.com/esphome/esphome.git@dev" ;;
+          esac
+          esphome version
+      - uses: actions/cache@v6
+        with:
+          path: ~/.platformio
+          key: pio-pkg-${{ matrix.esphome }}-${{ hashFiles('tests/*.yaml', 'packages/*.yaml') }}
+      - name: Compile
+        run: esphome -s fjx7_ref ${{ github.event.pull_request.head.sha || github.sha }} compile tests/${{ matrix.config }}.yaml

@@ -1,0 +1,12 @@
+# Dometic FJX/FJZ bridge — Home Assistant package
+#
+# Adds the encrypted ESPHome API so Home Assistant can discover the bridge.
+# Uses the same encryption_key as OTA (set in your config).
+
+api:
+  encryption:
+    key: ${encryption_key}
+  # ESPHome's default reboots the board after 15 min with no HA connected.
+  # That's wrong for a bridge that may also (or only) be used over MQTT,
+  # or whose HA box is switched off.
+  reboot_timeout: 0s

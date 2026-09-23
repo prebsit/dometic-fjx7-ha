@@ -1,0 +1,79 @@
+# Dometic FJX/FJZ bridge — core package (always required)
+#
+# The AC component, Bluetooth, and the climate/light/sensor entities.
+# Pair it with ha.yaml (Home Assistant), mqtt.yaml (Node-RED / Victron /
+# anything MQTT), or both. See examples/ for complete configs.
+#
+# Required substitutions (set in YOUR config):
+#   ac_mac          Bluetooth MAC of the AC (SHE_xxxxxx in a BLE scanner)
+#   encryption_key  32-byte base64 key (openssl rand -base64 32), used for
+#                   OTA updates and, with ha.yaml, the Home Assistant API
+#
+# Optional substitutions (defaults below):
+#   name, friendly_name, board, fjx7_ref
+
+substitutions:
+  name: fjx7-bridge
+  friendly_name: "Dometic AC Bridge"
+  board: esp32-s3-devkitm-1
+  # Which version of the component to build. Pin to a release tag.
+  fjx7_ref: main
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  # OTA encryption below needs 2026.9+
+  min_version: 2026.9.0
+
+esp32:
+  board: ${board}
+  framework:
+    type: esp-idf
+
+logger:
+
+# Encrypted OTA only. Unencrypted OTA is removed in ESPHome 2027.3.0.
+ota:
+  - platform: esphome
+    encryption:
+      key: ${encryption_key}
+
+esp32_ble_tracker:
+
+ble_client:
+  - mac_address: ${ac_mac}
+    id: fjx7_ble
+
+external_components:
+  - source:
+      type: git
+      url: https://github.com/prebsit/dometic-fjx7-ha
+      ref: ${fjx7_ref}
+    components: [dometic_fjx7]
+
+dometic_fjx7:
+  ble_client_id: fjx7_ble
+
+climate:
+  - platform: dometic_fjx7
+    id: ac
+    name: "AC"
+
+light:
+  - platform: dometic_fjx7
+    id: interior_light
+    name: "Interior Light"
+    light_type: interior
+  - platform: dometic_fjx7
+    id: exterior_light
+    name: "Exterior Light"
+    light_type: exterior
+
+sensor:
+  - platform: dometic_fjx7
+    measured_temperature:
+      id: cabin_temperature
+      name: "Temperature"
+    fan_speed_percent:
+      id: fan_speed
+      name: "Fan Speed"

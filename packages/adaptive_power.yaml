@@ -1,0 +1,10 @@
+# Dometic FJX/FJZ bridge — Adaptive Power Mode (optional)
+#
+# Adds a select that caps the AC's current draw: 4A / 5A / 6A / 7A / Unlimited.
+# Confirmed on the FJZ7 2200. Not yet confirmed on FJX units: without this
+# package the bridge never touches the setting at all.
+
+select:
+  - platform: dometic_fjx7
+    id: adaptive_power
+    name: "Adaptive Power"

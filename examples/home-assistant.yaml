@@ -1,0 +1,29 @@
+# Dometic FJX/FJZ bridge — Home Assistant only
+#
+# secrets.yaml next to this file needs:
+#   wifi_ssid, wifi_password
+#   encryption_key   (generate with: openssl rand -base64 32)
+
+substitutions:
+  name: fjx7-bridge
+  friendly_name: "Dometic AC Bridge"
+  board: esp32-s3-devkitm-1          # ESP32-S3 SuperMini / DevKitM
+  ac_mac: "XX:XX:XX:XX:XX:XX"        # your AC's SHE_xxxxxx address
+  encryption_key: !secret encryption_key
+  fjx7_ref: v0.4.0                   # keep in step with `ref:` below
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+captive_portal:
+
+packages:
+  fjx7:
+    url: https://github.com/prebsit/dometic-fjx7-ha
+    ref: v0.4.0
+    files:
+      - packages/core.yaml
+      - packages/ha.yaml
+      # - packages/adaptive_power.yaml   # FJZ: yes. FJX: untested, try it and report back
+    refresh: 1d

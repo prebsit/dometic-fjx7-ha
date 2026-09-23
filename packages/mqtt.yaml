@@ -1,0 +1,39 @@
+# Dometic FJX/FJZ bridge — MQTT package
+#
+# For Node-RED (e.g. on a Victron GX running Venus OS Large), Signal K,
+# or anything else that speaks MQTT. Safe to combine with ha.yaml.
+#
+# Required substitutions:
+#   mqtt_broker     hostname or IP of your MQTT broker
+#
+# Optional substitutions (defaults below):
+#   mqtt_port, mqtt_username, mqtt_password, mqtt_topic_prefix
+#
+# Topics (with the default prefix dometic/<name>):
+#   dometic/<name>/status                          online / offline
+#   dometic/<name>/climate/ac/...                  climate state + commands
+#   dometic/<name>/sensor/temperature/state        cabin temperature
+#   dometic/<name>/light/interior_light/...        lights
+#   dometic/<name>/select/adaptive_power/...       only with adaptive_power.yaml
+# (ESPHome's standard MQTT topic layout; exact names follow the entity names.)
+
+substitutions:
+  mqtt_port: "1883"
+  mqtt_username: ""
+  mqtt_password: ""
+  mqtt_topic_prefix: dometic/${name}
+
+mqtt:
+  broker: ${mqtt_broker}
+  port: ${mqtt_port}
+  username: ${mqtt_username}
+  password: ${mqtt_password}
+  topic_prefix: ${mqtt_topic_prefix}
+  # Home Assistant users get the bridge through ha.yaml. MQTT discovery on
+  # top of that would give every entity twice.
+  discovery: false
+  # Don't publish the device's debug log over MQTT.
+  log_topic: null
+  # ESPHome's default reboots the board after 15 min with no broker.
+  # A bridge used only with HA must not reboot four times an hour.
+  reboot_timeout: 0s
