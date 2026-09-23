@@ -17,7 +17,7 @@ Changes made on the AC's own panel or remote show up on the GX too.
 importing. FJX units accept the setting but ignore it.
 
 > **Status:** tested in a motorhome on an Ekrano GX (Venus OS Large) with a
-> real FJX7: power, mode, speed (incl. Turbo) and target work in both
+> real FJX7: power, mode (cool and heat), speed (incl. Turbo) and target work in both
 > directions, from the GX screen and from VRM. Written against
 > node-red-contrib-victron 1.7.27. If a Victron node looks wrong after import,
 > open it, re-select the switch type and deploy.
