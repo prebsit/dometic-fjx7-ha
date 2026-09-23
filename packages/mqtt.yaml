@@ -34,6 +34,8 @@ mqtt:
   discovery: false
   # Don't publish the device's debug log over MQTT.
   log_topic: null
+  # Don't announce on esphome/discover (only useful to the ESPHome dashboard).
+  discover_ip: false
   # ESPHome's default reboots the board after 15 min with no broker.
   # A bridge used only with HA must not reboot four times an hour.
   reboot_timeout: 0s
