@@ -1,0 +1,43 @@
+name: Build
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "0 6 * * 1"  # weekly: catch ESPHome releases breaking us before users do
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 2026.3.0 = last release before the entity-level custom fan mode API
+        # latest   = current stable
+        # dev      = early warning (e.g. 2026.11 removals)
+        esphome: ["2026.3.0", "latest", "dev"]
+        config: ["fjx-minimal", "fjz-full"]
+    continue-on-error: ${{ matrix.esphome == 'dev' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install ESPHome
+        run: |
+          case "${{ matrix.esphome }}" in
+            latest) pip install esphome ;;
+            dev)    pip install "esphome @ git+https://github.com/esphome/esphome.git@dev" ;;
+            *)      pip install "esphome==${{ matrix.esphome }}" ;;
+          esac
+          esphome version
+      - uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-${{ matrix.esphome }}-${{ hashFiles('tests/*.yaml') }}
+      - name: Compile
+        run: esphome compile tests/${{ matrix.config }}.yaml

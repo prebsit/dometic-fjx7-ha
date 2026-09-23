@@ -1,0 +1,52 @@
+# CI build: the v0.2.0-style config an existing FJX user has (no select).
+# Must keep compiling so upgrades never break FJX users.
+esphome:
+  name: ci-fjx-minimal
+
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: esp-idf
+
+logger:
+  level: DEBUG
+
+api:
+
+wifi:
+  ssid: "ci"
+  password: "ci-password"
+
+esp32_ble_tracker:
+
+ble_client:
+  - mac_address: "00:00:00:00:00:00"
+    id: fjx7_ble
+
+external_components:
+  - source:
+      type: local
+      path: ../components
+    components: [dometic_fjx7]
+
+dometic_fjx7:
+  ble_client_id: fjx7_ble
+
+climate:
+  - platform: dometic_fjx7
+    name: "AC"
+
+light:
+  - platform: dometic_fjx7
+    name: "Interior Light"
+    light_type: interior
+  - platform: dometic_fjx7
+    name: "Exterior Light"
+    light_type: exterior
+
+sensor:
+  - platform: dometic_fjx7
+    measured_temperature:
+      name: "Temperature"
+    fan_speed_percent:
+      name: "Fan Speed"
