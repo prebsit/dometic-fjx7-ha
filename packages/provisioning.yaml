@@ -72,16 +72,8 @@ esphome:
             if (id(wifi_joined_once)) {
               wifi::global_wifi_component->set_ap_timeout(0);
             }
-    # Normal boots (already set up): Bluetooth on once everything's running.
-    - priority: -100
-      then:
-        - if:
-            condition:
-              lambda: 'return id(wifi_joined_once);'
-            then:
-              - ble.enable
 
-# Bluetooth stays OFF until the board has joined WiFi at least once.
+# Bluetooth stays OFF until WiFi connects, on every boot (see wifi on_connect).
 # The ESP32 has one radio shared by WiFi and BLE. ESPHome 2026.9 defaults the
 # BLE scan window to 100% duty (relying on ESP-IDF's coexistence arbiter), and
 # on the bench that starved the setup hotspot: phones could see it but not
@@ -106,7 +98,8 @@ wifi:
     # and the user can try again. After that it's 0 (off), set at runtime.
     ap_timeout: 90s
   on_connect:
-    # First-ever join: switch Bluetooth on now, no reboot needed.
+    # Every WiFi connect (first join AND every boot): Bluetooth only starts
+    # once WiFi is up, so it never competes with the WPA2 handshake.
     - ble.enable
     - lambda: |-
         wifi::global_wifi_component->set_ap_timeout(0);

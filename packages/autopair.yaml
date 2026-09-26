@@ -1,0 +1,93 @@
+# Dometic FJX/FJZ bridge — auto-pair package (v0.5)
+#
+# No AC address compiled in. The board pairs with whichever FreshJet is put
+# into pairing mode (hold + and - together on the panel for 3 s) and saves
+# its address to flash. Factory reset forgets it.
+#
+# Requires core.yaml, with ac_mac left at "00:00:00:00:00:00". Address 0
+# makes ESPHome's BLE client ignore every device (ble_client_base.cpp,
+# parse_device) until we set one.
+#
+# How pairing mode is spotted (found on an FJX7, 2026-09-26): SHE_xxxxxx
+# adverts carry two manufacturer-data entries under company ID 0x0845. The
+# second entry's first byte is 0x00 normally and 0x01 for about a minute
+# after + and - are held. A neighbour's unit in normal mode never matches,
+# so the board never even connects to it.
+#
+# A candidate only gets saved once the AC is actually sending data (the
+# cabin temperature report arrives), which means the bond worked. If
+# nothing arrives within 60 s the candidate is dropped.
+
+globals:
+  # Saved AC address. 0 = not paired. Wiped by factory reset.
+  - id: ac_mac
+    type: uint64_t
+    restore_value: true
+    initial_value: "0"
+  # RAM only: the unit we're currently trying to pair with.
+  - id: pair_candidate
+    type: uint64_t
+    restore_value: false
+    initial_value: "0"
+  - id: pair_started
+    type: uint32_t
+    restore_value: false
+    initial_value: "0"
+
+esphome:
+  on_boot:
+    # After all setup. BLE itself only starts once WiFi connects.
+    - priority: -100
+      then:
+        - lambda: |-
+            if (id(ac_mac) != 0) {
+              id(fjx7_ble).set_address(id(ac_mac));
+              ESP_LOGI("pair", "Paired AC: %012llX", (unsigned long long) id(ac_mac));
+            } else {
+              ESP_LOGI("pair", "Not paired yet: hold + and - on the AC panel for 3 s");
+            }
+
+esp32_ble_tracker:
+  on_ble_advertise:
+    - then:
+        - lambda: |-
+            if (id(ac_mac) != 0 || id(pair_candidate) != 0) return;
+            auto name = x.get_name();
+            if (name.size() < 4 || strncmp(name.c_str(), "SHE_", 4) != 0) return;
+            int n = 0;
+            bool pairing = false;
+            for (auto &m : x.get_manufacturer_datas()) {
+              if (m.uuid.type() != decltype(m.uuid)::Type::UUID16 || m.uuid.uuid16() != 0x0845) continue;
+              n++;
+              if (n == 2 && !m.data.empty() && m.data[0] == 0x01) pairing = true;
+            }
+            if (!pairing) return;
+            id(pair_candidate) = x.address_uint64();
+            id(pair_started) = millis();
+            ESP_LOGI("pair", "%.*s is in pairing mode (rssi %d), connecting",
+                     (int) name.size(), name.c_str(), x.get_rssi());
+            id(fjx7_ble).set_address(x.address_uint64());
+
+interval:
+  - interval: 1s
+    then:
+      - lambda: |-
+          static int sync_in = 0;
+          if (sync_in > 0 && --sync_in == 0) {
+            // Globals are polled every 1 s; flush them to flash now.
+            global_preferences->sync();
+          }
+          uint64_t c = id(pair_candidate);
+          if (c == 0) return;
+          if (id(cabin_temperature).has_state()) {
+            id(ac_mac) = c;
+            id(pair_candidate) = 0;
+            sync_in = 3;
+            ESP_LOGI("pair", "Paired with %012llX and saved", (unsigned long long) c);
+          } else if (millis() - id(pair_started) > 60000) {
+            ESP_LOGW("pair", "No data from %012llX within 60 s; hold + and - again",
+                     (unsigned long long) c);
+            id(pair_candidate) = 0;
+            id(fjx7_ble).disconnect();
+            id(fjx7_ble).set_address(0);
+          }
