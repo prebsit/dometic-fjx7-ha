@@ -1,0 +1,13 @@
+# CI build: self-install firmware (captive portal, no WiFi compiled in) + MQTT.
+substitutions:
+  name: ci-prov
+  ac_mac: "00:00:00:00:00:00"
+  # Public CI-only keys. NEVER use on a device.
+  encryption_key: "hh099O86RNsj3RKMWZo4y8f9JOWwltp3Z7lXl6NqnwM="
+  ap_key: "00000000000000000000000000000000"
+  mqtt_broker: 192.0.2.1
+
+packages:
+  core: !include ../packages/core.yaml
+  provisioning: !include ../packages/provisioning.yaml
+  mqtt: !include ../packages/mqtt.yaml

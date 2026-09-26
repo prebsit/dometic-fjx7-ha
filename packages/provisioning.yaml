@@ -1,0 +1,121 @@
+# Dometic FJX/FJZ bridge — self-install provisioning package (v0.5)
+#
+# "Board in a box": no WiFi network is compiled in. On first boot the board
+# starts its own hotspot with a captive portal where the user picks their
+# WiFi. Once it has joined a network it never brings the hotspot back, even
+# if that network disappears; it just keeps retrying. To move it to a
+# different network: factory reset.
+#
+#   Hotspot name:     <name>-xxxxxx   (last 6 hex digits of the chip's MAC)
+#   Hotspot password: xxxx-xxxx-xxxx  (unique per board, see below)
+#
+# The password is HMAC-SHA256(ap_key, "fjx7-ap-v1" + base MAC), mapped to an
+# unambiguous alphabet (no 0/o/1/l/i). It is:
+#   - unique per board, and printable on a setup card BEFORE the board ever
+#     boots (tools/ap_card.py computes it from the MAC esptool prints);
+#   - stable across factory reset (factory reset erases all of NVS, so a
+#     random password stored on first boot would stop matching the card);
+#   - only as secret as ap_key. Keep ap_key out of git and out of any
+#     publicly built firmware. Anyone holding ap_key + a board's MAC (which
+#     the hotspot broadcasts) can compute that board's password.
+#
+# The board also logs the hotspot SSID and password at boot (ESPHome's own
+# "Setting up AP" line). Use that to check a card against the real board.
+#
+# Saved WiFi credentials: with no networks compiled in, ESPHome stores them
+# under a fixed preference key (not the config hash), so they survive
+# firmware updates. Verified in esphome/components/wifi/wifi_component.cpp,
+# WiFiComponent::start(), ESPHome 2026.9.0.
+#
+# Required substitutions:
+#   ap_key   secret used to derive hotspot passwords (openssl rand -hex 16).
+#            Hex only: it is pasted into a C string literal.
+
+esphome:
+  # Hotspot and hostname become <name>-xxxxxx, so two bridges in one
+  # campsite don't collide.
+  name_add_mac_suffix: true
+  on_boot:
+    # Priority 600 runs before WiFi setup (250). The AP password is only
+    # read when the AP actually starts, so this always wins.
+    - priority: 600
+      then:
+        - lambda: |-
+            uint8_t mac[6];
+            get_mac_address_raw(mac);
+            const char *key = "${ap_key}";
+            hmac_sha256::HmacSHA256 h;
+            h.init(key, strlen(key));
+            h.add("fjx7-ap-v1", 10);
+            h.add(mac, 6);
+            h.calculate();
+            uint8_t d[32];
+            h.get_bytes(d);
+            // 31 symbols, no 0/o/1/l/i. 12 symbols ~ 59 bits.
+            static const char ALPHABET[] = "abcdefghjkmnpqrstuvwxyz23456789";
+            char pw[15];
+            int j = 0;
+            for (int i = 0; i < 12; i++) {
+              if (i == 4 || i == 8) pw[j++] = '-';
+              pw[j++] = ALPHABET[d[i] % 31];
+            }
+            pw[j] = '\0';
+            auto ap = wifi::global_wifi_component->get_ap();
+            ap.set_password(pw);
+            wifi::global_wifi_component->set_ap(ap);
+            // Once the board has joined a network, never fall back to the
+            // hotspot again (router switched off overnight, van away from
+            // home). Only a factory reset brings the hotspot back.
+            // ap_timeout 0 disables the fallback AP: wifi_component.cpp loop(),
+            // "if (this->ap_timeout_ != 0 && ...)". Globals restore at
+            // HARDWARE priority (800), so the flag is loaded by now.
+            if (id(wifi_joined_once)) {
+              wifi::global_wifi_component->set_ap_timeout(0);
+            }
+    # Normal boots (already set up): Bluetooth on once everything's running.
+    - priority: -100
+      then:
+        - if:
+            condition:
+              lambda: 'return id(wifi_joined_once);'
+            then:
+              - ble.enable
+
+# Bluetooth stays OFF until the board has joined WiFi at least once.
+# The ESP32 has one radio shared by WiFi and BLE. ESPHome 2026.9 defaults the
+# BLE scan window to 100% duty (relying on ESP-IDF's coexistence arbiter), and
+# on the bench that starved the setup hotspot: phones could see it but not
+# complete the WPA2 handshake. BLE is useless before WiFi exists anyway.
+esp32_ble:
+  enable_on_boot: false
+
+hmac_sha256:
+
+globals:
+  # Survives reboots and firmware updates; wiped by factory reset.
+  - id: wifi_joined_once
+    type: bool
+    restore_value: true
+    initial_value: "false"
+
+wifi:
+  # No ssid/networks on purpose: credentials come from the captive portal.
+  ap:
+    # Only applies until the first successful connection. Until then a
+    # mistyped WiFi password isn't fatal: the hotspot comes back after 90s
+    # and the user can try again. After that it's 0 (off), set at runtime.
+    ap_timeout: 90s
+  on_connect:
+    # First-ever join: switch Bluetooth on now, no reboot needed.
+    - ble.enable
+    - lambda: |-
+        wifi::global_wifi_component->set_ap_timeout(0);
+        id(wifi_joined_once) = true;
+    # Globals are polled every 1s and flushed to flash on the preferences
+    # interval. Force the flush so a power cut straight after setup can't
+    # lose the flag.
+    - delay: 2s
+    - lambda: global_preferences->sync();
+
+captive_portal:
+
