@@ -51,7 +51,7 @@ jobs:
       fail-fast: false
       matrix:
         esphome: ["latest", "dev"]
-        config: ["packages-all", "packages-mqtt-only"]
+        config: ["packages-all", "packages-mqtt-only", "packages-box"]
     continue-on-error: ${{ matrix.esphome == 'dev' }}
     steps:
       - uses: actions/checkout@v7

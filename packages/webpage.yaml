@@ -1,0 +1,308 @@
+# Dometic FJX/FJZ bridge — web page package (v0.5)
+#
+# The board's own web page: control the AC from any phone on the van WiFi,
+# and set it up without reflashing. Open http://<board name>.local or the
+# board's IP address.
+#
+#   AC fan speed    the climate card on ESPHome's page has no fan control
+#                   (esphome-webserver v3 render_climate: current, target,
+#                   mode only), so it gets its own dropdown here
+#   Victron / Node-RED (MQTT)
+#     MQTT broker IP   the Cerbo/Ekrano's IP (or any broker). Add :port for
+#                      a non-standard port. Blank = MQTT off.
+#     MQTT username / MQTT password   blank if the broker doesn't need them
+#   Pairing         which AC the board is paired with, or how to pair
+#   Forget AC       unpair and restart, ready to pair with another unit
+#   Factory reset   wipe WiFi, AC pairing and MQTT settings; the board comes
+#                   back as its setup hotspot. Needs two presses within 10 s,
+#                   because the page has no "are you sure?" box.
+#
+# No login on the page: the board is only ever on the van's private WiFi.
+#
+# DO NOT RENAME the three MQTT text entities once boards have shipped: the
+# saved value is keyed on the entity's name, so a rename silently blanks
+# every customer's broker setting on the next update.
+#
+# Changing an MQTT setting restarts the board (about 10 s) to apply it:
+# ESPHome's ESP-IDF MQTT client reads its broker settings once, the first
+# time it connects (mqtt_backend_esp32.cpp, initialize_), so a new broker
+# can't be swapped in while it's running.
+#
+# Requires core.yaml, mqtt.yaml and autopair.yaml. The broker in YOUR config
+# is ignored (leave mqtt_broker unset); the page's setting is used instead,
+# and survives OTA updates. Factory reset clears it.
+
+substitutions:
+  # Placeholder only: mqtt.yaml needs a value, but MQTT starts switched off
+  # and the page's broker setting is what gets used.
+  mqtt_broker: "unset.invalid"
+  # The fan dropdown replaces the Fan Speed % reading on this build.
+  fan_speed_internal: "true"
+
+web_server:
+  version: 3
+  # Serve the page's JavaScript from the board itself. The default loads it
+  # from oi.esphome.io, which fails when the van has no internet.
+  local: true
+  # The page's live log would show the WiFi password during setup.
+  log: false
+  # The page's built-in groups have weights 0 (Sensor and Control),
+  # 1 (Configuration) and 2 (Diagnostic); slot the Victron box in after
+  # the controls.
+  sorting_groups:
+    - id: grp_victron
+      name: "Victron / Node-RED (MQTT)"
+      sorting_weight: 0.5
+
+mqtt:
+  # Off until a broker is set on the page (switched on in on_boot below).
+  enable_on_boot: false
+
+esphome:
+  on_boot:
+    # After MQTT's own setup (AFTER_WIFI = 250). The text settings are
+    # restored much earlier (HARDWARE = 800), so they're ready here.
+    - priority: 200
+      then:
+        - lambda: |-
+            std::string host = id(mqtt_host).state;
+            // Tolerate spaces pasted from a phone.
+            host.erase(0, host.find_first_not_of(' '));
+            host.erase(host.find_last_not_of(' ') + 1);
+            if (host.empty()) {
+              ESP_LOGI("mqtt_cfg", "No broker set: MQTT off");
+              return;
+            }
+            uint16_t port = 1883;
+            auto colon = host.rfind(':');
+            if (colon != std::string::npos) {
+              int p = atoi(host.c_str() + colon + 1);
+              if (p > 0 && p < 65536) port = p;
+              host = host.substr(0, colon);
+            }
+            auto *m = mqtt::global_mqtt_client;
+            m->set_broker_address(host);
+            m->set_broker_port(port);
+            m->set_username(id(mqtt_user).state);
+            m->set_password(id(mqtt_pass).state);
+            ESP_LOGI("mqtt_cfg", "Broker %s:%u", host.c_str(), port);
+            m->enable();
+
+# Order the controls: AC, its fan, then the lights. (The two sensors come
+# after these; they're nested inside one platform entry in core.yaml, so
+# they can't be extended from here.)
+climate:
+  - id: !extend ac
+    web_server:
+      sorting_weight: 1
+    on_state:
+      # Keep the fan dropdown in step with the AC, whoever changed it.
+      - lambda: |-
+          const char *s = nullptr;
+          if (x.has_custom_fan_mode()) s = "Turbo";
+          else if (x.fan_mode.has_value()) {
+            switch (*x.fan_mode) {
+              case climate::CLIMATE_FAN_AUTO: s = "Auto"; break;
+              case climate::CLIMATE_FAN_LOW: s = "Low"; break;
+              case climate::CLIMATE_FAN_MEDIUM: s = "Medium"; break;
+              case climate::CLIMATE_FAN_HIGH: s = "High"; break;
+              default: break;
+            }
+          }
+          if (s != nullptr && !(id(ac_fan).current_option() == s)) id(ac_fan).publish_state(s);
+
+select:
+  - platform: template
+    id: ac_fan
+    name: "AC fan speed"
+    icon: mdi:fan
+    options: ["Auto", "Low", "Medium", "High", "Turbo"]
+    # MQTT already has this as climate/ac/fan_mode.
+    state_topic: null
+    command_topic: null
+    web_server:
+      sorting_weight: 2
+    set_action:
+      - lambda: |-
+          auto call = id(ac).make_call();
+          if (x == "Turbo") call.set_fan_mode("Turbo");
+          else if (x == "Low") call.set_fan_mode(climate::CLIMATE_FAN_LOW);
+          else if (x == "Medium") call.set_fan_mode(climate::CLIMATE_FAN_MEDIUM);
+          else if (x == "High") call.set_fan_mode(climate::CLIMATE_FAN_HIGH);
+          else call.set_fan_mode(climate::CLIMATE_FAN_AUTO);
+          call.perform();
+
+light:
+  - id: !extend interior_light
+    web_server:
+      sorting_weight: 3
+  - id: !extend exterior_light
+    web_server:
+      sorting_weight: 4
+
+text:
+  - platform: template
+    id: mqtt_host
+    name: "MQTT broker IP"
+    icon: mdi:server-network
+    mode: text
+    max_length: 64
+    optimistic: true
+    restore_value: true
+    entity_category: config
+    # Settings never go out over MQTT themselves.
+    state_topic: null
+    web_server:
+      sorting_group_id: grp_victron
+      sorting_weight: 1
+    set_action:
+      - script.execute: mqtt_restart
+  - platform: template
+    id: mqtt_user
+    name: "MQTT username"
+    icon: mdi:account
+    mode: text
+    max_length: 64
+    optimistic: true
+    restore_value: true
+    entity_category: config
+    state_topic: null
+    web_server:
+      sorting_group_id: grp_victron
+      sorting_weight: 2
+    set_action:
+      - script.execute: mqtt_restart
+  - platform: template
+    id: mqtt_pass
+    name: "MQTT password"
+    icon: mdi:key
+    mode: password
+    max_length: 64
+    optimistic: true
+    restore_value: true
+    entity_category: config
+    state_topic: null
+    web_server:
+      sorting_group_id: grp_victron
+      sorting_weight: 3
+    set_action:
+      - script.execute: mqtt_restart
+
+script:
+  # Restart to apply MQTT settings. Waits 5 s (and starts the wait again on
+  # every change) so filling in broker, username and password in one go
+  # costs one restart, not three.
+  - id: mqtt_restart
+    mode: restart
+    then:
+      - logger.log:
+          level: WARN
+          format: "MQTT settings changed: restarting in 5 s to apply"
+      # The page doesn't always notice the board coming back, so say so.
+      - text_sensor.template.publish:
+          id: mqtt_status
+          state: "Saved. Restarting: reload this page in 20 s"
+      - delay: 5s
+      - lambda: |-
+          global_preferences->sync();
+          App.safe_reboot();
+
+text_sensor:
+  - platform: template
+    id: pair_status
+    name: "Pairing"
+    icon: mdi:bluetooth
+    entity_category: diagnostic
+    update_interval: never
+    state_topic: null
+  - platform: template
+    id: mqtt_status
+    name: "MQTT connection"
+    icon: mdi:lan-connect
+    entity_category: diagnostic
+    update_interval: never
+    state_topic: null
+    web_server:
+      sorting_group_id: grp_victron
+      sorting_weight: 4
+
+interval:
+  # Refresh the two status lines, publishing only when the text changes.
+  - interval: 2s
+    then:
+      - lambda: |-
+          char buf[96];
+          uint64_t a = id(ac_mac) ? id(ac_mac) : id(pair_candidate);
+          if (a == 0) {
+            snprintf(buf, sizeof(buf), "Not paired: hold + and - on the AC panel for 3 s");
+          } else {
+            // The unit's name is SHE_ + the last 3 bytes of its base MAC,
+            // which is the Bluetooth address minus 2.
+            unsigned tail = (unsigned) ((a - 2) & 0xFFFFFF);
+            const char *what = id(ac_mac) == 0 ? "pairing with"
+                             : id(fjx7_ble).connected() ? "connected to" : "paired, connecting to";
+            snprintf(buf, sizeof(buf), "%s SHE_%06x", what, tail);
+            buf[0] = toupper(buf[0]);
+          }
+          if (id(pair_status).state != buf) id(pair_status).publish_state(buf);
+
+          std::string host = id(mqtt_host).state;
+          const char *s = host.empty() ? "Off (no broker set)"
+                        : mqtt::global_mqtt_client->is_connected() ? "Connected" : "Not connected";
+          // Leave the "Saved. Restarting" message up until the restart.
+          if (!id(mqtt_restart).is_running() && id(mqtt_status).state != s) id(mqtt_status).publish_state(s);
+
+button:
+  - platform: template
+    name: "Forget AC (press twice within 10 s)"
+    icon: mdi:link-off
+    entity_category: config
+    command_topic: null
+    state_topic: null
+    on_press:
+      - if:
+          condition:
+            # First press arms it; a second press within 10 s goes ahead.
+            lambda: |-
+              static uint32_t armed = 0;
+              if (armed == 0 || millis() - armed >= 10000) {
+                armed = millis();
+                ESP_LOGW("pair", "Forget AC armed: press again within 10 s");
+                return false;
+              }
+              armed = 0;
+              return true;
+          then:
+            - lambda: |-
+                ESP_LOGW("pair", "Forgetting AC and restarting");
+                id(pair_status).publish_state("Forgotten. Restarting: reload this page in 20 s");
+                id(ac_mac) = 0;
+                id(pair_candidate) = 0;
+                global_preferences->sync();
+            # A clean restart, so no reading from the old unit can make the
+            # next pairing attempt look successful.
+            - delay: 1s
+            - lambda: App.safe_reboot();
+  - platform: template
+    name: "Factory reset (press twice within 10 s)"
+    icon: mdi:restore-alert
+    entity_category: config
+    command_topic: null
+    state_topic: null
+    on_press:
+      - lambda: |-
+          static uint32_t armed = 0;
+          if (armed != 0 && millis() - armed < 10000) {
+            ESP_LOGW("reset", "Factory reset from web page");
+            id(pair_status).publish_state("Factory reset: the board will come back as its setup hotspot");
+            // Same as ESPHome's factory_reset button (factory_reset_button.cpp).
+            global_preferences->reset();
+            App.safe_reboot();
+          }
+          armed = millis();
+          ESP_LOGW("reset", "Factory reset armed: press again within 10 s");
+  - platform: restart
+    name: "Restart"
+    entity_category: config
+    command_topic: null
+    state_topic: null

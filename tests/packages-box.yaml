@@ -1,0 +1,17 @@
+# CI build: the v0.5 "board in a box" firmware, exactly as posted to users:
+# captive-portal WiFi, auto-pair, web page, HA and MQTT (MQTT off until a
+# broker is set on the page). fjx7_ref is overridden on the command line.
+substitutions:
+  name: ci-box
+  ac_mac: "00:00:00:00:00:00"
+  # Public CI-only keys. NEVER use on a device.
+  encryption_key: "hh099O86RNsj3RKMWZo4y8f9JOWwltp3Z7lXl6NqnwM="
+  ap_key: "00000000000000000000000000000000"
+
+packages:
+  core: !include ../packages/core.yaml
+  provisioning: !include ../packages/provisioning.yaml
+  ha: !include ../packages/ha.yaml
+  mqtt: !include ../packages/mqtt.yaml
+  autopair: !include ../packages/autopair.yaml
+  webpage: !include ../packages/webpage.yaml

@@ -18,6 +18,9 @@ substitutions:
   board: esp32-s3-devkitm-1
   # Which version of the component to build. Pin to a release tag.
   fjx7_ref: main
+  # "true" hides the Fan Speed % sensor everywhere (webpage.yaml does this:
+  # with a fan dropdown on the page, the % reading only confuses).
+  fan_speed_internal: "false"
 
 esphome:
   name: ${name}
@@ -77,3 +80,4 @@ sensor:
     fan_speed_percent:
       id: fan_speed
       name: "Fan Speed"
+      internal: ${fan_speed_internal}
