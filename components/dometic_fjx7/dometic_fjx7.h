@@ -135,6 +135,18 @@ class DometicFJX7Climate : public climate::Climate, public Component {
  protected:
   void control(const climate::ClimateCall &call) override;
   DometicFJX7 *parent_{nullptr};
+
+  // Last state actually published. The AC reports each parameter separately,
+  // so update_state() runs several times per change (and on every 30 s poll).
+  // Republishing unchanged state spammed MQTT (6 identical bursts per command)
+  // and kept re-opening Node-RED's echo-suppression window, dropping presses.
+  bool published_{false};
+  bool last_power_{false};
+  uint32_t last_ac_mode_{0};
+  uint32_t last_fan_speed_{0};
+  float last_target_temp_{0};
+  float last_current_temp_{0};
+  bool last_sleep_{false};
 };
 
 class DometicFJX7Light : public light::LightOutput, public Component {

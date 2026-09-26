@@ -302,6 +302,19 @@ climate::ClimateTraits DometicFJX7Climate::traits() {
 void DometicFJX7Climate::update_state(bool power, uint32_t ac_mode,
                                        uint32_t fan_speed, float target_temp,
                                        float current_temp, bool sleep_active) {
+  // Skip if nothing changed since the last publish (see header comment).
+  if (this->published_ && power == this->last_power_ && ac_mode == this->last_ac_mode_ &&
+      fan_speed == this->last_fan_speed_ && target_temp == this->last_target_temp_ &&
+      current_temp == this->last_current_temp_ && sleep_active == this->last_sleep_)
+    return;
+  this->published_ = true;
+  this->last_power_ = power;
+  this->last_ac_mode_ = ac_mode;
+  this->last_fan_speed_ = fan_speed;
+  this->last_target_temp_ = target_temp;
+  this->last_current_temp_ = current_temp;
+  this->last_sleep_ = sleep_active;
+
   if (!power) {
     this->mode = climate::CLIMATE_MODE_OFF;
   } else {
