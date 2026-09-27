@@ -40,7 +40,7 @@ About ten minutes, all from your phone. You need the board's **ID** (the last si
 Then, depending on what else you run:
 
 - **Victron GX (Cerbo, Ekrano…):** type the GX's IP address into **MQTT broker IP** on the board's page and press Enter. The board restarts (about 10 s) and the **MQTT connection** line changes to *Connected*. Then set up the GX side: see [Victron GX](#victron-gx-via-node-red).
-- **Home Assistant:** it should find the board by itself (Settings → Devices & Services). Adopt it and HA sets its own encryption key. *(Not yet tested on the board-in-a-box firmware: reports welcome.)*
+- **Home Assistant:** it should find the board by itself (Settings → Devices & Services). Adopt it and HA sets its own encryption key.
 - **Neither:** the web page *is* your remote.
 
 **Starting again (factory reset).** Any of these wipes the WiFi, the AC pairing and the MQTT settings, and brings the setup hotspot back:
@@ -309,6 +309,10 @@ The FJX7 **requires encrypted BLE** (Just Works bonding). Without bonding, all w
 
 **MQTT connection says "Not connected"**
 - Check the IP in **MQTT broker IP**. On a Victron GX, MQTT must be on (Settings → Services → MQTT (plaintext)).
+
+**Home Assistant offers "Reconfigure" instead of "Add"**
+- HA remembers an older setup of a board with the same name (after a re-flash or a factory reset). Reconfiguring switches the connection to unencrypted. Delete the old device in HA first, then add the board fresh: HA then sets a new encryption key on it.
+- A factory reset wipes the key HA set, so HA will need to add the board again afterwards.
 
 **State doesn't update in HA**
 - Check the logs (`esphome logs <your config>.yaml`) for `All parameters subscribed`.
