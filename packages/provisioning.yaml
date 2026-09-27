@@ -36,6 +36,28 @@ esphome:
   # campsite don't collide.
   name_add_mac_suffix: true
   on_boot:
+    # While the setup hotspot is up, plain http://192.168.4.1/ must show
+    # the WiFi setup page. With web_server (webpage.yaml) in the build,
+    # "/" would otherwise go to the AC control page: web_server's
+    # canHandle() claims "/" and was registered first, and the first
+    # handler that says yes wins (web_server_idf.cpp). Priority 700 runs
+    # before web_server's setup (WIFI - 1 = 249), so this handler is
+    # registered ahead of it; it steps aside once the portal closes.
+    - priority: 700
+      then:
+        - lambda: |-
+            struct PortalRoot : public AsyncWebHandler {
+              bool canHandle(AsyncWebServerRequest *req) const override {
+                auto *cp = captive_portal::global_captive_portal;
+                if (cp == nullptr || !cp->is_active() || req->method() != HTTP_GET) return false;
+                char buf[AsyncWebServerRequest::URL_BUF_SIZE];
+                return req->url_to(buf) == "/";
+              }
+              void handleRequest(AsyncWebServerRequest *req) override {
+                captive_portal::global_captive_portal->handleRequest(req);
+              }
+            };
+            web_server_base::global_web_server_base->add_handler_without_auth(new PortalRoot());
     # Priority 600 runs before WiFi setup (250). The AP password is only
     # read when the AP actually starts, so this always wins.
     - priority: 600
