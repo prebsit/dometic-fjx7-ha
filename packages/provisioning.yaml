@@ -139,3 +139,10 @@ wifi:
 
 captive_portal:
 
+
+logger:
+  logs:
+    # The captive portal logs the new WiFi password at INFO when it is saved
+    # (captive_portal.cpp, handle_wifisave). Silence just that component;
+    # everything else keeps its normal level for support.
+    captive_portal: WARN
