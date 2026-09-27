@@ -10,7 +10,7 @@ substitutions:
   board: esp32-s3-devkitm-1          # ESP32-S3 SuperMini / DevKitM
   ac_mac: "XX:XX:XX:XX:XX:XX"        # your AC's SHE_xxxxxx address
   encryption_key: !secret encryption_key
-  fjx7_ref: v0.4.0                   # keep in step with `ref:` below
+  fjx7_ref: v0.5.0-rc.1                   # keep in step with `ref:` below
 
 wifi:
   ssid: !secret wifi_ssid
@@ -21,7 +21,7 @@ captive_portal:
 packages:
   fjx7:
     url: https://github.com/prebsit/dometic-fjx7-ha
-    ref: v0.4.0
+    ref: v0.5.0-rc.1
     files:
       - packages/core.yaml
       - packages/ha.yaml

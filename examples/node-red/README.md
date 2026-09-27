@@ -61,14 +61,18 @@ importing the new one, or you'll end up with two sets of switches.
 AC ⇄ BLE ⇄ ESP32 bridge ⇄ MQTT (dometic/<name>/…) ⇄ Node-RED ⇄ Victron virtual switches ⇄ GX screen / VRM
 ```
 
-The flow learns the bridge's topic prefix from its messages, so the bridge
-`name` doesn't need to match anything. Commands are only sent after the bridge
-has been seen at least once.
+The flow learns the bridge's topic prefix from its `status` topic and follows
+whichever bridge last said `online`, so the bridge `name` doesn't need to match
+anything, and a dead board's leftover messages can't take over. Commands are
+only sent once a bridge has been seen online.
 
 Every change on the GX produces a state update from the AC, which moves the
-GX switch again. The flow ignores those echoes (and repeats of a command it
-sent in the last few seconds), so the GX and the AC can't ping-pong a
-setting back and forth.
+GX switch again. The flow ignores those echoes: a GX change is dropped only if
+it matches a value the AC reported in the last 1.5 s, so a real press straight
+after an update still goes through. The target temperature waits until the
+slider has been still for 0.7 s and sends one command. Each command node shows
+its last decision on the canvas (`sent …` / `echo ignored …`), which tells you
+at a glance whether Node-RED sent a press.
 
 **Only one system should run automations for the AC.** If Home Assistant is
 also connected (`packages/ha.yaml`), let one of them own the logic and use the

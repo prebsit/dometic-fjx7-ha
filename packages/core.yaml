@@ -27,6 +27,11 @@ esphome:
   friendly_name: ${friendly_name}
   # OTA encryption below needs 2026.9+
   min_version: 2026.9.0
+  # Shows as the firmware version in Home Assistant and in the boot log.
+  # Bump with every release tag.
+  project:
+    name: prebsit.dometic-fjx7
+    version: "0.5.0-rc.1"
 
 esp32:
   board: ${board}

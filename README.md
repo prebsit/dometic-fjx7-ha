@@ -1,19 +1,105 @@
-# Dometic FreshJet FJX / FJZ — ESPHome Component for Home Assistant
+# Dometic FreshJet FJX / FJZ — ESPHome Bridge for Home Assistant, Victron and your phone
 
-The first working Home Assistant integration for the Dometic FreshJet FJX7 roof-mounted air conditioning unit — now also confirmed on the FJX4 and the newer FJZ7. Full bidirectional control over BLE via an ESP32 bridge.
+The first working integration for Dometic FreshJet roof air conditioners. An ESP32 talks to the unit over Bluetooth and puts it on your van's WiFi: in **Home Assistant**, on a **Victron GX** screen (Cerbo, Ekrano) via Node-RED, or on a plain **web page** on your phone. Confirmed on the FJX7, FJX4 and FJZ7.
 
 **No cloud. No Dometic app. No wiring.**
 
+> **Current release: v0.5.0-rc.1** (release candidate). The "board in a box" firmware is being field-tested. If you want something that won't change under you, pin `ref: v0.2.0` (component only) or a later tag in your config instead of `main`.
+
 ## What You Get
 
-- **Climate entity** — Cool, Heat, Auto, Dry, Fan Only, Off
+- **Climate control** — Cool, Heat, Auto, Dry, Fan Only, Off; target temperature 16–31 °C
 - **Fan speed** — Low, Medium, High, Turbo, Auto
-- **Temperature** — target and measured, 16–31°C
-- **Interior & exterior lights** — on/off control
-- **Adaptive Power Mode** *(optional, FJZ only)* — cap the unit's current draw at 4/5/6/7 A or unlimited, so it can't trip a weak hookup. See [Adaptive Power Mode](#adaptive-power-mode-param-0x2d)
-- **Sleep mode** — engage the FJX7's Sleep preset (moon icon, dimmed display, quiet low fan) via Home Assistant's `preset_mode` dropdown
-- **Instant sync** — state changes from the ADBD panel appear in HA immediately via BLE notifications
-- **Auto-reconnect** — ESP32 recovers from power cycles and disconnections automatically
+- **Interior & exterior lights** — on/off
+- **Sleep mode** — the FJX7's Sleep preset (moon icon, dimmed display, quiet fan)
+- **Adaptive Power Mode** *(optional, FJZ only)* — cap the unit's current draw at 4/5/6/7 A or unlimited
+- **Instant sync** — changes made on the AC's own panel or remote show up everywhere immediately
+- **Auto-reconnect** — recovers from power cycles and the AC being switched off at the isolator
+- **Three ways in** — Home Assistant (ESPHome API), MQTT (Victron GX via Node-RED, or any broker), and the board's own web page. Use any or all of them.
+
+## Pick your route
+
+| You have… | Go to |
+|---|---|
+| An ESP32-S3 and want to build your own | [Building your own](#building-your-own) |
+| A board already flashed with the board-in-a-box firmware | [Setting up a board-in-a-box](#setting-up-a-board-in-a-box) |
+| Your own ESPHome config and just want the component | [Using the component directly](#using-the-component-directly) |
+
+## Setting up a board-in-a-box
+
+About ten minutes, all from your phone. You need the board's **ID** (the last six characters of its MAC, e.g. `f1de94`) and its **setup password**; `tools/ap_card.py` prints both, plus a WiFi QR code, when you flash it (see [Building your own](#building-your-own)).
+
+1. **Plug the board in** near the AC (any 5 V USB supply).
+2. **Join its setup hotspot.** Scan the QR code, or join the WiFi network `fjx7-bridge-<ID>` with the setup password.
+3. **Open Safari / Chrome and go to `http://192.168.4.1`.** (Your phone may pop this page up by itself; if not, open it by hand.) Pick your van's WiFi, enter its password, save. The board joins your WiFi and the hotspot disappears.
+   The board only ever joins **your van's private WiFi**. It has no login on its web page, so don't put it on a campsite network.
+4. **Pair it with the AC.** On the AC's control panel, hold **+ and −** together for 3 seconds until the display shows `BL`. The board finds the unit and pairs with it by itself, usually within a few seconds.
+5. **Open its page:** `http://fjx7-bridge-<ID>.local` on any phone or laptop on the van WiFi. Tip: add it to your home screen. The **Pairing** line should say *Connected to SHE_xxxxxx*.
+   Android phones don't always understand `.local` addresses. If the page won't open, find the board's IP address in your router's list of devices and use that instead.
+
+Then, depending on what else you run:
+
+- **Victron GX (Cerbo, Ekrano…):** type the GX's IP address into **MQTT broker IP** on the board's page and press Enter. The board restarts (about 10 s) and the **MQTT connection** line changes to *Connected*. Then set up the GX side: see [Victron GX](#victron-gx-via-node-red).
+- **Home Assistant:** it should find the board by itself (Settings → Devices & Services). Adopt it and HA sets its own encryption key. *(Not yet tested on the board-in-a-box firmware: reports welcome.)*
+- **Neither:** the web page *is* your remote.
+
+**Starting again (factory reset).** Any of these wipes the WiFi, the AC pairing and the MQTT settings, and brings the setup hotspot back:
+- **Unplug and plug back in 5 times**, unplugging within 10 s each time. The 5th time, leave it plugged in.
+- Hold the board's **BOOT** button for 10 s while it's running (not while plugging it in).
+- On the web page, press **Factory reset** twice within 10 s.
+
+**Pairing with a different AC:** press **Forget AC** twice within 10 s on the web page, then hold + and − on the new unit.
+
+**Known quirks (release candidate):**
+- After changing an MQTT setting the page doesn't always notice the board coming back. Reload it after 20 s.
+- The page's firmware upload box is not password-protected (neither is the page). That's by design for a board on a private van network, but it is why the board must never go on public WiFi.
+
+## Building your own
+
+The firmware is split into packages, so you only build what you use. Every example pins a release tag; bump `ref:` and `fjx7_ref:` together when you update.
+
+| Example | What it builds |
+|---|---|
+| [`examples/home-assistant.yaml`](examples/home-assistant.yaml) | Home Assistant only. WiFi and the AC's address set in your config |
+| [`examples/victron-node-red.yaml`](examples/victron-node-red.yaml) | MQTT for Victron / Node-RED (add `ha.yaml` for both) |
+| [`examples/board-in-a-box.yaml`](examples/board-in-a-box.yaml) | Board-in-a-box: nothing about the van compiled in; set up from a phone (setup hotspot, auto-pair, web page, HA, MQTT, factory reset) |
+
+| Package | Does |
+|---|---|
+| `core.yaml` | Required. The component, Bluetooth, and the climate/light/sensor entities |
+| `ha.yaml` | Home Assistant (encrypted ESPHome API) |
+| `mqtt.yaml` | MQTT, for Node-RED on a Victron GX or any broker |
+| `adaptive_power.yaml` | FJZ only: the Adaptive Power select |
+| `provisioning.yaml` | Setup hotspot + captive portal instead of compiled-in WiFi. Needs `ap_key` |
+| `autopair.yaml` | Pairs with whichever unit is put into pairing mode, instead of a compiled-in MAC |
+| `webpage.yaml` | The control and setup web page (MQTT settings live here) |
+| `reset.yaml` | Factory reset by 5 power cycles or holding BOOT |
+
+**Building the board-in-a-box firmware:** `board-in-a-box.yaml` needs two secrets, `encryption_key` (OTA) and `ap_key` (the hotspot master key; `openssl rand -hex 16`). The build stops with an error if `ap_key` is missing. After flashing over USB, print the board's hotspot details from the MAC address esptool shows:
+
+```bash
+AP_KEY=<your ap_key> python3 tools/ap_card.py <board MAC>
+```
+
+It prints the SSID, the password and the `WIFI:` string for a QR code. **Never publish firmware built with your `ap_key`**: anyone holding it and a board's MAC can work out that board's hotspot password.
+
+### Hardware
+
+- **ESP32-S3 board.** The S3 handles Bluetooth and WiFi together without trouble.
+- USB-C cable for the first flash; a 5 V USB supply in the van.
+
+| Board | Status | Notes |
+|-------|--------|-------|
+| ESP32-S3 SuperMini | ✅ Confirmed | Small, cheap, rock solid. Used for the board-in-a-box build. BOOT is the right-hand button with USB-C at the bottom |
+| ESP32-S3-DevKitC-1 (N16R8) | ✅ Confirmed | Dual-core, plenty of RAM |
+| ESP32-C3 SuperMini | Untested | Single-core — may struggle with BLE+WiFi |
+| ESP32-C6 | Untested | BLE 5.3 — should work |
+
+**ESPHome:** 2026.9.0 or newer for the packages (OTA encryption). On every push and weekly, CI builds the component against several ESPHome versions and every package config against the current and development ESPHome.
+
+### Victron GX via Node-RED
+
+[`examples/node-red/`](examples/node-red/) has a flow that puts the AC on the GX screen and in VRM as a group of virtual switches (power, mode, fan speed, target temperature, and the FJZ power limit), in both directions. It needs **Venus OS Large** with Node-RED switched on and the GX's MQTT enabled. The [Node-RED README](examples/node-red/README.md) covers setup and import.
 
 ## Why an ESP32?
 
@@ -23,38 +109,9 @@ Apple's CoreBluetooth handles this silently (macOS works fine with bleak/Python)
 
 If you happen to run Home Assistant on a Mac Mini, a Python/bleak custom component approach may work for you via CoreBluetooth — but the ESPHome component is the recommended and tested path.
 
-## Hardware Required
+## Using the component directly
 
-- **ESP32-S3 development board** — we use the ESP32-S3-DevKitC-1 (N16R8). Any ESP32-S3 board with WiFi and BLE should work. The S3's dual-core handles BLE and WiFi concurrently without watchdog issues.
-- **USB-C cable** for initial flashing
-- **5V USB power source** in the van for permanent installation
-
-No wiring to the FJX7 — communication is entirely wireless over BLE.
-
-**Boards we've tested:**
-
-| Board | Status | Notes |
-|-------|--------|-------|
-| ESP32-S3-DevKitC-1 (N16R8) | ✅ Confirmed | Recommended. Dual-core, plenty of RAM |
-| ESP32-S3 SuperMini | ✅ Confirmed | Tested over a long weekend, rock solid |
-| ESP32-C3 SuperMini | Untested | Single-core — may struggle with BLE+WiFi |
-| ESP32-C6 | Untested | BLE 5.3, dual-core — should work well |
-
-## Installation
-
-### 1. Install ESPHome
-
-**ESPHome compatibility:** the component builds on both sides of ESPHome's 2026.4 custom-fan-mode API change, including 2026.11+ where the old API is removed. If a new ESPHome release breaks the build, open an issue with the version and the compiler error.
-
-If you don't have ESPHome installed:
-
-```bash
-pip install esphome
-```
-
-### 2. Create your configuration
-
-Create a file called `fjx7-bridge.yaml`:
+If you'd rather write your own config, this is the minimal version (WiFi and the AC's address compiled in). Put your secrets in `secrets.yaml` (`wifi_ssid`, `wifi_password`, `api_key`, `ota_key`; generate the keys with `openssl rand -base64 32`).
 
 ```yaml
 esphome:
@@ -67,7 +124,6 @@ esp32:
     type: esp-idf
 
 logger:
-  level: DEBUG
 
 api:
   encryption:
@@ -75,29 +131,26 @@ api:
 
 ota:
   - platform: esphome
-    password: !secret ota_password
+    encryption:
+      key: !secret ota_key
 
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
 
-# Optional: creates a WiFi hotspot if the configured network isn't available
 captive_portal:
 
 esp32_ble_tracker:
-  scan_parameters:
-    active: true
 
 ble_client:
-  - mac_address: "XX:XX:XX:XX:XX:XX"  # Replace with your FJX7's MAC address
+  - mac_address: "XX:XX:XX:XX:XX:XX"  # your AC's address, see below
     id: fjx7_ble
-    auto_connect: true
 
 external_components:
   - source:
       type: git
       url: https://github.com/prebsit/dometic-fjx7-ha
-      ref: main  # better: pin to a release tag so updates don't surprise you
+      ref: v0.5.0-rc.1  # pin a release tag so updates don't surprise you
     components: [dometic_fjx7]
 
 dometic_fjx7:
@@ -105,93 +158,38 @@ dometic_fjx7:
 
 climate:
   - platform: dometic_fjx7
-    name: "FJX7 Air Conditioning"
+    name: "Air Conditioning"
 
 light:
   - platform: dometic_fjx7
-    name: "FJX7 Interior Light"
+    name: "Interior Light"
     light_type: interior
   - platform: dometic_fjx7
-    name: "FJX7 Exterior Light"
+    name: "Exterior Light"
     light_type: exterior
 
 sensor:
   - platform: dometic_fjx7
     measured_temperature:
-      name: "FJX7 Temperature"
+      name: "Temperature"
     fan_speed_percent:
-      name: "FJX7 Fan Speed"
+      name: "Fan Speed"
 
-# Optional — Adaptive Power Mode. FJZ only: FJX units accept the setting but
-# ignore it. Without this the component never touches param 0x2D.
+# FJZ only: Adaptive Power. Without this the component never touches 0x2D.
 # select:
 #   - platform: dometic_fjx7
 #     name: "Adaptive Power"
-
-button:
-  - platform: restart
-    name: "FJX7 Bridge Restart"
 ```
 
-Create a `secrets.yaml` in the same directory:
+**Finding the AC's address.** The unit advertises as `SHE_xxxxxx`. Flash with any address first and watch the log for `Name: 'SHE_…'`, or use a phone BLE scanner (nRF Connect). The Bluetooth address is the unit's base MAC plus 2: `SHE_36bd48` is `…:36:BD:4A`.
 
-```yaml
-wifi_ssid: "Your WiFi Name"
-wifi_password: "your-wifi-password"
-api_key: "generate-a-random-key-here"
-ota_password: "pick-a-password"
-```
+**Pairing (first time only).** The AC only accepts a new bond in pairing mode: hold **+ and −** on the panel for 3 s until it shows `BL`, then restart the ESP32. The log should show `Connected — requesting encryption` then `All parameters subscribed`. The bond survives power cycles and updates. If you skip this, the log loops `Connected` / `Disconnected`.
 
-### 3. Find your FJX7's MAC address
-
-Before you can connect, you need your FJX7's Bluetooth MAC address. The quickest way: flash the ESP32 with the config above (leaving the MAC as `XX:XX:XX:XX:XX:XX`). It won't connect, but the BLE scanner will log every device it finds:
-
-```
-Found device 02:00:00:12:34:56 RSSI=-85
-  Name: 'SHE_123456'
-```
-
-Look for a device named `SHE_XXXXXX` — that's your FJX7. Copy the MAC address into your YAML and re-flash.
-
-Alternatively, use any BLE scanner app on your phone (like nRF Connect) and look for `SHE_` devices.
-
-### 4. Flash the ESP32
-
-```bash
-esphome run fjx7-bridge.yaml
-```
-
-Select the USB port when prompted. The ESP32 will compile, flash, and connect to WiFi. It'll then start trying to connect to the FJX7 over BLE — but on first install the FJX7 won't be ready to bond yet. Proceed to step 5 before panicking about the logs.
-
-### 5. Put the FJX7 into pairing mode (first time only)
-
-The FJX7 will only accept a new BLE bond when it's in pairing mode. If you've ever used the Dometic Climate app, the AC has bonded with your phone but nothing else — the ESP32 will be rejected on its first connection attempt.
-
-**To put the FJX7 into pairing mode:** on the ADBD control panel, press and hold the **+ and − buttons together for 3 seconds**. The tiny display will show **`BL`** when pairing mode is active.
-
-Then power-cycle the ESP32 (or press its reset button). In the ESPHome logs you should see it connect, bond, and subscribe to parameters:
-
-```
-[dometic_fjx7] Connected — requesting encryption
-[dometic_fjx7] Notification registration OK — starting subscribes
-[dometic_fjx7] All parameters subscribed
-```
-
-Once bonded, the keys persist in the ESP32's flash and in the FJX7's own bond table. You won't need to do this again — the ESP32 will reconnect silently after power cycles, firmware updates, or the AC being switched off at the isolator.
-
-**Symptom if you skip this step:** ESPHome logs show `Connected` followed almost immediately by `Disconnected`, looping indefinitely. Put the FJX7 in pairing mode (`BL` on the display) and reset the ESP32.
-
-### 6. Add to Home Assistant
-
-Home Assistant should auto-discover the new ESPHome device. If not, go to Settings → Devices & Services → Add Integration → ESPHome, and enter the ESP32's IP address.
-
-**Important:** Close the Dometic Climate app first. The FJX7 only accepts one BLE connection at a time.
+**Close the Dometic app first**: the AC only accepts one Bluetooth connection at a time.
 
 ## How It Works
 
-The ESP32 connects to the FJX7 using Dometic's DDM (Device Data Model) protocol over BLE GATT. It subscribes to all climate parameters and receives instant push notifications when anything changes — mode, fan speed, temperature, lights. Commands from Home Assistant are sent as DDM Set commands over the same BLE connection.
-
-The bond keys are stored in the ESP32's flash (NVS), so it reconnects automatically after power cycles without needing to re-pair.
+The ESP32 connects to the AC using Dometic's DDM (Device Data Model) protocol over BLE GATT. It subscribes to the climate parameters and gets push notifications whenever anything changes. Commands go back as DDM Set commands over the same connection. Bond keys live in the ESP32's flash, so it reconnects by itself.
 
 ## Supported Devices
 
@@ -290,44 +288,55 @@ Values 4–6 are reserved and not exposed — possibly used on higher-current mo
 
 The FJX7 **requires encrypted BLE** (Just Works bonding). Without bonding, all writes fail with ATT error `0x0F` (Insufficient Encryption). The ESP-IDF stack handles this by calling `esp_ble_set_encryption()` on connection, and bond keys persist in NVS across reboots.
 
-## For Dometic Engineers
-
-If you're from Dometic and reading this — hello. Here's what we found while reverse-engineering the FJX7's BLE interface, in case it's useful for firmware improvements:
-
-**1. ATT Write Response is missing on some stacks.** The FJX7's Microchip BLE module does not send ATT Write Response (opcode 0x13) when accessed from Linux's BlueZ stack, even after successful bonding and encryption. The write *does* take effect on the device, but the missing response causes BlueZ to consider the write failed and eventually drop the connection. This does not occur with Apple's CoreBluetooth or Espressif's ESP-IDF/NimBLE. This is likely the root cause of many negative reviews of the Dometic Climate Android app.
-
-**2. Write Request required, Write Command ignored.** The FJX7 only processes ATT Write Request (opcode 0x12). ATT Write Command (opcode 0x52) is silently ignored. Both are valid per the BLE specification; the firmware only implements one.
-
-**3. Single BLE connection limit.** The FJX7 only accepts one BLE client at a time. If the Dometic app is connected, no other client can connect, and vice versa. This is worth documenting for users.
-
-**4. Fan speed value 4 is unused.** The fan speed parameter accepts values 0–3 and 5, but not 4. Sending 4 appears to default to Auto mode.
-
-**5. Sleep mode disabled in Fan Only.** The Sleep flag (parameter 0x1B) accepts writes via BLE but is silently rejected when the unit is in Fan Only mode. Sleep works correctly in Cool and Heat (compressor-using modes). Sleep would be useful in Fan Only too for off-grid motorhome scenarios — gentle nighttime ventilation without battery-draining compressor cycles is a relevant use case for the market the FJX7 targets.
-
-We'd be happy to test patched firmware if you'd like to address any of these. Open an issue on this repo.
-
 ## Troubleshooting
 
-**ESP32 won't connect to FJX7 / connects then disconnects in a loop**
-- **First check:** has the FJX7 been put into pairing mode? Hold + and − on the ADBD panel together for 3 seconds — the display should show `BL`. See step 5 above.
-- Close the Dometic Climate app on every phone in range — the FJX7 only accepts one connection at a time
-- Check the MAC address in your YAML matches your FJX7
-- Ensure the ESP32 is within BLE range (~10m, less through walls/metal)
-- If pairing mode doesn't help, power-cycle the FJX7 at the isolator and try again
-- Last resort: wipe the ESP32's NVS with `esphome clean fjx7-bridge.yaml` followed by a full re-flash, then redo step 5
+**Can't see the setup hotspot**
+- Unplug the board for 5 seconds and plug it back in. If your phone has "forgotten" the network, iPhones sometimes hide it until the board restarts.
+- The hotspot only exists before setup or after a factory reset. Once the board has joined your WiFi it never falls back to the hotspot, even if the router is off.
 
-**Connection drops or watchdog resets**
-- The ESP32-S3 occasionally hits watchdog timeouts when BLE and WiFi are competing for radio time. The device recovers automatically. If it happens frequently, ensure good WiFi signal strength to reduce radio contention.
+**The setup page doesn't pop up**
+- Open a browser and go to `http://192.168.4.1` while joined to the hotspot.
+
+**Pairing says "Not paired"**
+- Hold + and − on the AC panel for 3 s until it shows `BL`. Pairing mode lasts about a minute.
+- Close the Dometic app on every phone nearby: the AC only takes one connection.
+- Board-in-a-box: if it still won't pair, press Forget AC twice on the page and try again.
+
+**Connects then disconnects in a loop** (own config)
+- Pairing mode not used: see [Pairing](#using-the-component-directly).
+- Check the MAC address; check the ESP32 is within range (~10 m, less through metal).
+- Power-cycle the AC at the isolator and try again.
+
+**MQTT connection says "Not connected"**
+- Check the IP in **MQTT broker IP**. On a Victron GX, MQTT must be on (Settings → Services → MQTT (plaintext)).
 
 **State doesn't update in HA**
-- Check ESPHome logs: `esphome logs fjx7-bridge.yaml`
-- Look for `All parameters subscribed` — if missing, the BLE connection isn't completing
+- Check the logs (`esphome logs <your config>.yaml`) for `All parameters subscribed`.
 
 ## Contributing
 
-PRs welcome. If you have a different Dometic connected product (FJX5, FJX3, or anything else using DDM), your testing would help expand support. The DDM protocol layer is shared across the range.
+PRs welcome. If you have another Dometic connected product (FJX5, FJX3, anything using DDM), your testing would help: the protocol layer is shared across the range. FJZ owners: a BLE scan of your unit's advert (nRF Connect, the manufacturer data under company 0x0845) would help the board tell FJX and FJZ apart.
 
 ## Changelog
+
+### v0.5.0-rc.1 — board in a box (release candidate)
+- **Board-in-a-box firmware** ([`examples/board-in-a-box.yaml`](examples/board-in-a-box.yaml)): flash once, then set everything up from a phone, with nothing about the van compiled in
+- **Setup hotspot** with a per-board password derived from a secret key and the board's MAC (`tools/ap_card.py`). Once joined, the board never falls back to the hotspot, so a router switched off overnight doesn't strand it
+- **Bluetooth waits for WiFi**: ESPHome's default full-time scanning starved the hotspot's WiFi handshake on the S3
+- **Auto-pair**: pairs with whichever unit is put into pairing mode (the pairing flag is the first byte of the second manufacturer-data entry in the advert), saved to flash
+- **Web page**: AC control with a fan-speed dropdown (ESPHome's page has none), Victron/MQTT settings, pairing and MQTT status, Forget AC, Factory reset, Restart
+- **MQTT broker set on the page**, not compiled in. Blank = MQTT off
+- **Factory reset** by 5 power cycles or holding BOOT for 10 s
+- **Fix: MQTT spam** — the climate state is only published when something changed
+- **Fix: Node-RED dropped and duplicated presses** — value-aware echo check, temperature slider debounce, follows only the online bridge
+- **Safety:** the build refuses to run without a real `ap_key`; the WiFi password is never logged
+- Tested on an FJX7 with an ESP32-S3 SuperMini, an iPhone and an Ekrano GX
+
+### v0.4.0 — packages, MQTT and Victron
+- **ESPHome packages**: `core`, `ha`, `mqtt`, `adaptive_power`; pick what you need
+- **MQTT** for Node-RED, Signal K or any broker
+- **Victron GX Node-RED flow**: the AC as virtual switches on the GX screen and VRM (power, mode, fan speed, target, FJZ power limit). Tested on an Ekrano with a real FJX7, cooling and heating
+- CI builds the package configs too
 
 ### v0.3.0
 - **FJZ support** — confirmed working on the FJZ7 2200 ([@DRAKS1000](https://github.com/DRAKS1000))

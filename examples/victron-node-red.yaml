@@ -16,7 +16,7 @@ substitutions:
   mqtt_broker: 192.168.1.10          # your broker (e.g. the GX device's IP)
   # mqtt_username: ""
   # mqtt_password: ""
-  fjx7_ref: v0.4.0                   # keep in step with `ref:` below
+  fjx7_ref: v0.5.0-rc.1                   # keep in step with `ref:` below
 
 wifi:
   ssid: !secret wifi_ssid
@@ -27,7 +27,7 @@ captive_portal:
 packages:
   fjx7:
     url: https://github.com/prebsit/dometic-fjx7-ha
-    ref: v0.4.0
+    ref: v0.5.0-rc.1
     files:
       - packages/core.yaml
       - packages/mqtt.yaml
