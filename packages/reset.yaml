@@ -1,0 +1,47 @@
+# Dometic FJX/FJZ bridge — factory reset package (v0.5)
+#
+# Two ways to wipe the board (WiFi, AC pairing, MQTT settings) and bring
+# back its setup hotspot, for when the web page can't be reached:
+#
+#   1. Unplug and plug back in 5 times. Each time, unplug within 10 s of
+#      plugging in. The 5th plug-in wipes it. (ESPHome's own factory_reset
+#      component: it counts power-on resets, factory_reset.cpp.)
+#   2. Hold the BOOT button (right-hand button, USB-C at the bottom) for
+#      10 s while the board is running. Not while plugging in: that puts
+#      the chip into flash mode, and it looks dead until unplugged again.
+#
+# Both do exactly what the page's Factory reset button does:
+# global_preferences->reset() then a restart.
+
+factory_reset:
+  resets_required: 5
+  max_delay: 10s
+  on_increment:
+    - logger.log:
+        level: WARN
+        format: "Power cycle %u of %u towards factory reset"
+        args: [x, target]
+
+binary_sensor:
+  - platform: gpio
+    id: boot_button
+    name: "BOOT button"
+    # Only for the reset below: not shown on the page, HA or MQTT.
+    internal: true
+    pin:
+      number: GPIO0
+      inverted: true
+      mode:
+        input: true
+        pullup: true
+      # GPIO0 only matters at power-on (it selects flash mode); once the
+      # board is running it's an ordinary input.
+      ignore_strapping_warning: true
+    filters:
+      # Fires only after 10 s of continuous hold.
+      - delayed_on: 10s
+    on_press:
+      - lambda: |-
+          ESP_LOGW("reset", "BOOT held 10 s: factory reset");
+          global_preferences->reset();
+          App.safe_reboot();
