@@ -17,6 +17,8 @@ The first working integration for Dometic FreshJet roof air conditioners. An ESP
 - **Auto-reconnect** — recovers from power cycles and the AC being switched off at the isolator
 - **Three ways in** — Home Assistant (ESPHome API), MQTT (Victron GX via Node-RED, or any broker), and the board's own web page. Use any or all of them.
 
+If you're in the UK, not confident in flashing your own, drop me a message and I might be able to post you a preconfigured board out.
+
 ## Pick your route
 
 | You have… | Go to |
