@@ -43,7 +43,12 @@ esphome:
         - lambda: |-
             uint8_t mac[6];
             get_mac_address_raw(mac);
-            const char *key = "${ap_key}";
+            // Refuse to build without a real key. ESPHome only WARNS about a
+            // missing substitution and leaves the placeholder text in place,
+            // which would give every such board the same, public secret.
+            static constexpr char key[] = "${ap_key}";
+            static_assert(sizeof(key) - 1 >= 32 && key[0] != '$',
+                          "ap_key missing or too short: add ap_key to substitutions (openssl rand -hex 16)");
             hmac_sha256::HmacSHA256 h;
             h.init(key, strlen(key));
             h.add("fjx7-ap-v1", 10);
