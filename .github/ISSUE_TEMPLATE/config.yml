@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Setup question or "is this working right?"
+    url: https://github.com/prebsit/dometic-fjx7-ha/discussions/categories/q-a
+    about: Ask in Discussions Q&A. Answers there help the next person too.
+  - name: Will it work with my aircon?
+    url: https://github.com/prebsit/dometic-fjx7-ha/discussions/categories/q-a
+    about: Check the "Which aircon models work?" thread first.
