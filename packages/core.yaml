@@ -13,7 +13,7 @@
 #   name, friendly_name, board, fjx7_ref
 
 substitutions:
-  name: fjx7-bridge
+  name: dometic-ac
   friendly_name: "Dometic AC Bridge"
   board: esp32-s3-devkitm-1
   # Which version of the component to build. Pin to a release tag.

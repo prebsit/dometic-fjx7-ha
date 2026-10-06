@@ -2,7 +2,7 @@
 """Print the setup-card details for a bridge built with packages/provisioning.yaml.
 
 Usage:
-    AP_KEY=<ap_key> python3 tools/ap_card.py <base MAC> [--name fjx7-bridge]
+    AP_KEY=<ap_key> python3 tools/ap_card.py <base MAC> [--name dometic-ac]
 
 <base MAC> is the "MAC:" line esptool prints when flashing, e.g. 3c:84:27:ab:cd:ef.
 
@@ -54,7 +54,7 @@ def qr_escape(s: str) -> str:
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("mac", help="base MAC from esptool, e.g. 3c:84:27:ab:cd:ef")
-    p.add_argument("--name", default="fjx7-bridge", help="ESPHome name substitution (default fjx7-bridge)")
+    p.add_argument("--name", default="dometic-ac", help="ESPHome name substitution (default dometic-ac)")
     args = p.parse_args()
 
     key = os.environ.get("AP_KEY")

@@ -32,11 +32,11 @@ If you're in the UK, not confident in flashing your own, drop me a message and I
 About ten minutes, all from your phone. You need the board's **ID** (the last six characters of its MAC, e.g. `f1de94`) and its **setup password**; `tools/ap_card.py` prints both, plus a WiFi QR code, when you flash it (see [Building your own](#building-your-own)).
 
 1. **Plug the board in** near the AC (any 5 V USB supply).
-2. **Join its setup hotspot.** Scan the QR code, or join the WiFi network `fjx7-bridge-<ID>` with the setup password.
+2. **Join its setup hotspot.** Scan the QR code, or join the WiFi network `dometic-ac-<ID>` with the setup password.
 3. **Open Safari / Chrome and go to `http://192.168.4.1`.** (Your phone may pop this page up by itself; if not, open it by hand.) Pick your van's WiFi, enter its password, save. The board joins your WiFi and the hotspot disappears.
    The board only ever joins **your van's private WiFi**. It has no login on its web page, so don't put it on a campsite network.
 4. **Pair it with the AC.** On the AC's control panel, hold **+ and −** together for 3 seconds until the display shows `BL`. The board finds the unit and pairs with it by itself, usually within a few seconds.
-5. **Open its page:** `http://fjx7-bridge-<ID>.local` on any phone or laptop on the van WiFi. Tip: add it to your home screen. The **Pairing** line should say *Connected to SHE_xxxxxx*.
+5. **Open its page:** `http://dometic-ac-<ID>.local` on any phone or laptop on the van WiFi. Tip: add it to your home screen. The **Pairing** line should say *Connected to SHE_xxxxxx*.
    Android phones don't always understand `.local` addresses. If the page won't open, find the board's IP address in your router's list of devices and use that instead.
 
 Then, depending on what else you run:
@@ -117,7 +117,7 @@ If you'd rather write your own config, this is the minimal version (WiFi and the
 
 ```yaml
 esphome:
-  name: fjx7-bridge
+  name: dometic-ac
   friendly_name: "Dometic FJX7 Bridge"
 
 esp32:

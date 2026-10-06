@@ -5,7 +5,7 @@
 #   encryption_key   (generate with: openssl rand -base64 32)
 
 substitutions:
-  name: fjx7-bridge
+  name: dometic-ac
   friendly_name: "Dometic AC Bridge"
   board: esp32-s3-devkitm-1          # ESP32-S3 SuperMini / DevKitM
   ac_mac: "XX:XX:XX:XX:XX:XX"        # your AC's SHE_xxxxxx address

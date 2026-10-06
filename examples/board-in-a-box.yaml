@@ -20,7 +20,7 @@
 #                    password. The build refuses to run without one.
 
 substitutions:
-  name: fjx7-bridge
+  name: dometic-ac
   friendly_name: "Dometic AC Bridge"
   board: esp32-s3-devkitm-1          # ESP32-S3 SuperMini / DevKitM
   ac_mac: "00:00:00:00:00:00"        # leave: the board pairs by itself
