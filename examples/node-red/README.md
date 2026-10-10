@@ -5,12 +5,17 @@ virtual switches called **Aircon**:
 
 | Control | Type | Does |
 |---|---|---|
-| AC power | Toggle | On (resumes the last mode, default Cool) / Off |
+| AC active | Toggle | On (resumes the last mode, default Cool) / Off |
 | AC mode | Dropdown | Cool / Heat / Auto / Fan / Dry |
+| AC power limit | Dropdown | **FJZ only.** Adaptive Power: 4A / 5A / 6A / 7A / Unlimited (needs `packages/adaptive_power.yaml`) |
+| AC sleep | Toggle | The AC's Sleep mode (moon icon, dimmed panel, quiet fan). Cool or Heat only, see below |
 | AC speed | Dropdown | Auto / Low / Medium / High / Turbo |
 | AC target | Temperature setpoint | 16–31 °C, with the measured cabin temperature shown alongside |
-| AC sleep | Toggle | The AC's Sleep mode (moon icon, dimmed panel, quiet fan). Cool or Heat only, see below |
-| AC power limit | Dropdown | **FJZ only.** Adaptive Power: 4A / 5A / 6A / 7A / Unlimited (needs `packages/adaptive_power.yaml`) |
+| AC unit light - exterior | Toggle | The AC's exterior light (harmless on units without one) |
+| AC unit light - interior | Toggle | The AC's interior light |
+
+The GX lists switches alphabetically by name, with no way to set the order,
+so the names are chosen to sort with the main controls first and the lights last.
 
 Changes made on the AC's own panel or remote show up on the GX too.
 
