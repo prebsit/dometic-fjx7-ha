@@ -9,9 +9,15 @@ virtual switches called **Aircon**:
 | AC mode | Dropdown | Cool / Heat / Auto / Fan / Dry |
 | AC speed | Dropdown | Auto / Low / Medium / High / Turbo |
 | AC target | Temperature setpoint | 16–31 °C, with the measured cabin temperature shown alongside |
+| AC sleep | Toggle | The AC's Sleep mode (moon icon, dimmed panel, quiet fan). Cool or Heat only, see below |
 | AC power limit | Dropdown | **FJZ only.** Adaptive Power: 4A / 5A / 6A / 7A / Unlimited (needs `packages/adaptive_power.yaml`) |
 
 Changes made on the AC's own panel or remote show up on the GX too.
+
+**Sleep needs a compressor mode.** The AC only accepts Sleep in Cool or Heat
+(Dry and Auto untested). In Fan, or with the AC off, it silently ignores the
+request, so the flow refuses it, warns on the *Sleep -> command* node and puts
+the switch back. Same if the AC hasn't confirmed Sleep within 4 s.
 
 **FJX owners:** delete the *AC power limit* and *Limit -> command* nodes after
 importing. FJX units accept the setting but ignore it.
