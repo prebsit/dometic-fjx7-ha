@@ -34,8 +34,8 @@ There are two versions of the flow. Import the one for your unit:
 > **Status:** tested in a motorhome on an Ekrano GX (Venus OS Large) with a
 > real FJX7: power, mode (cool and heat), speed (incl. Turbo) and target work in both
 > directions, from the GX screen and from VRM. Written against
-> node-red-contrib-victron 1.7.27. *AC sleep* is newer and so far only
-> tested in simulation, not on a real GX. If a Victron node looks wrong after import,
+> node-red-contrib-victron 1.7.27. *AC sleep* confirmed on the same Ekrano:
+> turns on in Cool, refused in Fan. If a Victron node looks wrong after import,
 > open it, re-select the switch type and deploy.
 
 ## Requirements
