@@ -101,7 +101,7 @@ It prints the SSID, the password and the `WIFI:` string for a QR code. **Never p
 
 ### Victron GX via Node-RED
 
-[`examples/node-red/`](examples/node-red/) has a flow that puts the AC on the GX screen and in VRM as a group of virtual switches (power, mode, fan speed, target temperature, and the FJZ power limit), in both directions. It needs **Venus OS Large** with Node-RED switched on and the GX's MQTT enabled. The [Node-RED README](examples/node-red/README.md) covers setup and import.
+[`examples/node-red/`](examples/node-red/) has a flow (one for FJX, one for FJZ) that puts the AC on the GX screen and in VRM as a group of virtual switches (power, mode, fan speed, target temperature, and the FJZ power limit), in both directions. It needs **Venus OS Large** with Node-RED switched on and the GX's MQTT enabled. The [Node-RED README](examples/node-red/README.md) covers setup and import.
 
 ## Why an ESP32?
 

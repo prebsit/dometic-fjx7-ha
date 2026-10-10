@@ -24,8 +24,12 @@ Changes made on the AC's own panel or remote show up on the GX too.
 request, so the flow refuses it, warns on the *Sleep -> command* node and puts
 the switch back. Same if the AC hasn't confirmed Sleep within 4 s.
 
-**FJX owners:** delete the *AC power limit* and *Limit -> command* nodes after
-importing. FJX units accept the setting but ignore it.
+There are two versions of the flow. Import the one for your unit:
+
+| File | For | Differs by |
+|---|---|---|
+| `victron-ac-flow-fjx.json` | FJX (FJX7, FJX4, …) | No *AC power limit*: FJX units accept the setting but ignore it |
+| `victron-ac-flow-fjz.json` | FJZ (FJZ7, …) | Includes *AC power limit* |
 
 > **Status:** tested in a motorhome on an Ekrano GX (Venus OS Large) with a
 > real FJX7: power, mode (cool and heat), speed (incl. Turbo) and target work in both
@@ -59,7 +63,7 @@ change the flow's broker config to port 1884, and rebuild the bridge with
 ## Import
 
 1. Open Node-RED on the GX (via VRM → Venus OS Large, or `https://<gx-ip>:1881`).
-2. Menu → **Import** → **Clipboard** tab → paste `victron-ac-flow.json` → **Import** → **Deploy**.
+2. Menu → **Import** → **Clipboard** tab → paste `victron-ac-flow-fjx.json` or `victron-ac-flow-fjz.json` → **Import** → **Deploy**.
 3. The **Route state** node shows the bridge's status (green = online).
 4. The Aircon group appears on the GX display. Switches may read 0 until the
    bridge publishes its first state.
