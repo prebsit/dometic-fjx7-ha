@@ -15,7 +15,7 @@ The first working integration for Dometic FreshJet roof air conditioners. An ESP
 - **Adaptive Power Mode** *(optional, FJZ only)* — cap the unit's current draw at 4/5/6/7 A or unlimited
 - **Instant sync** — changes made on the AC's own panel or remote show up everywhere immediately
 - **Auto-reconnect** — recovers from power cycles and the AC being switched off at the isolator
-- **Three ways in** — Home Assistant (ESPHome API), MQTT (Victron GX via Node-RED, or any broker), and the board's own web page. Use any or all of them.
+- **Four ways in** — Home Assistant (ESPHome API), MQTT (Victron GX via Node-RED, or any broker), the board's own web page, and an iPhone shortcut. Use any or all of them.
 
 If you're in the UK, not confident in flashing your own, drop me a message and I might be able to post you a preconfigured board out.
 
@@ -44,6 +44,19 @@ Then, depending on what else you run:
 - **Victron GX (Cerbo, Ekrano…):** type the GX's IP address into **MQTT broker IP** on the board's page and press Enter. The board restarts (about 10 s) and the **MQTT connection** line changes to *Connected*. Then set up the GX side: see [Victron GX](#victron-gx-via-node-red).
 - **Home Assistant:** it should find the board by itself (Settings → Devices & Services). Adopt it and HA sets its own encryption key.
 - **Neither:** the web page *is* your remote.
+- **iPhone:** add the **Aircon** shortcut for a one-tap remote (and Siri). See [iPhone shortcut](#iphone-shortcut).
+
+### iPhone shortcut
+
+One button that shows what the AC is doing ("AC COOL · set 21° · cabin 24° · fan AUTO") and lets you change mode, temperature, fan speed, sleep and the lights. After each change it reads the AC back and tells you what it actually did. Works with Siri: "Hey Siri, Aircon".
+
+It talks straight to the board over the van WiFi: no GX, no app, no cloud. That also means it only works when your phone is on the van WiFi. For control from anywhere you need a GX (Cerbo, Ekrano) and VRM; see [Victron GX](#victron-gx-via-node-red).
+
+1. Open **[Aircon shortcut](https://www.icloud.com/shortcuts/bc17475521644550973b51cc794ed488)** on your iPhone and tap **Add Shortcut**.
+2. In the Shortcuts app, open **Aircon** (tap ⋯ on it). The first box says `dometic-ac-xxxxxx.local`. Change it to your board's address from step 5 above, e.g. `dometic-ac-f1de94.local`, or the board's IP address.
+3. Tap it to run. That's it.
+
+The shortcut is built by [`shortcuts/build_aircon.py`](shortcuts/build_aircon.py), so you can read exactly what it sends. To build your own copy: `python3 shortcuts/build_aircon.py --host dometic-ac-<ID>.local`, then sign it on a Mac with `shortcuts sign -m anyone -i Aircon.shortcut -o signed/Aircon.shortcut` (iPhones only import signed shortcuts).
 
 **Starting again (factory reset).** Any of these wipes the WiFi, the AC pairing and the MQTT settings, and brings the setup hotspot back:
 - **Unplug and plug back in 5 times**, unplugging within 10 s each time. The 5th time, leave it plugged in.
