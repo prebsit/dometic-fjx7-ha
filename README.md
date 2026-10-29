@@ -58,6 +58,8 @@ It talks straight to the board over the van WiFi: no GX, no app, no cloud. That 
 
 The shortcut is built by [`shortcuts/build_aircon.py`](shortcuts/build_aircon.py), so you can read exactly what it sends. To build your own copy: `python3 shortcuts/build_aircon.py --host dometic-ac-<ID>.local`, then sign it on a Mac with `shortcuts sign -m anyone -i Aircon.shortcut -o signed/Aircon.shortcut` (iPhones only import signed shortcuts).
 
+Questions, problems or your own tweaks: see the [shortcut's discussion thread](https://github.com/prebsit/dometic-fjx7-ha/discussions/14).
+
 **Starting again (factory reset).** Any of these wipes the WiFi, the AC pairing and the MQTT settings, and brings the setup hotspot back:
 - **Unplug and plug back in 5 times**, unplugging within 10 s each time. The 5th time, leave it plugged in.
 - Hold the board's **BOOT** button for 10 s while it's running (not while plugging it in).
@@ -329,6 +331,15 @@ The FJX7 **requires encrypted BLE** (Just Works bonding). Without bonding, all w
 - HA remembers an older setup of a board with the same name (after a re-flash or a factory reset). Reconfiguring switches the connection to unencrypted. Delete the old device in HA first, then add the board fresh: HA then sets a new encryption key on it.
 - A factory reset wipes the key HA set, so HA will need to add the board again afterwards.
 
+**The iPhone shortcut can't reach the board**
+- The phone must be on the van WiFi: the shortcut talks straight to the board, never over the internet.
+- Check the first box of the shortcut matches the board's address on its setup sheet.
+- If `.local` addresses don't work on your phone, use the board's IP address instead (your router's list of devices shows it).
+
+**The shortcut says it worked but the AC didn't change**
+- The AC needs mains power: on hookup, or with the inverter on.
+- Sleep only works in Cool or Heat; in other modes the AC quietly ignores it.
+
 **State doesn't update in HA**
 - Check the logs (`esphome logs <your config>.yaml`) for `All parameters subscribed`.
 
@@ -337,6 +348,9 @@ The FJX7 **requires encrypted BLE** (Just Works bonding). Without bonding, all w
 PRs welcome. If you have another Dometic connected product (FJX5, FJX3, anything using DDM), your testing would help: the protocol layer is shared across the range. FJZ owners: a BLE scan of your unit's advert (nRF Connect, the manufacturer data under company 0x0845) would help the board tell FJX and FJZ apart.
 
 ## Changelog
+
+### Unreleased
+- **iPhone shortcut** ([`shortcuts/build_aircon.py`](shortcuts/build_aircon.py), [iCloud link](https://www.icloud.com/shortcuts/bc17475521644550973b51cc794ed488)): one-button control of the AC and lights from an iPhone on the van WiFi, with Siri. No firmware change: works with any board on v0.5.0-rc.1 or later
 
 ### v0.5.0-rc.1 — board in a box (release candidate)
 - **Board-in-a-box firmware** ([`examples/board-in-a-box.yaml`](examples/board-in-a-box.yaml)): flash once, then set everything up from a phone, with nothing about the van compiled in
