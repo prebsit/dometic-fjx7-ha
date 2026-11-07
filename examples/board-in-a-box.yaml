@@ -6,7 +6,10 @@
 #     password derived from ap_key and the board's MAC (tools/ap_card.py
 #     prints it). Join it, open http://192.168.4.1, pick the van WiFi.
 #   - AC: hold + and - on the AC panel for 3 s; the board pairs with that unit.
-#   - Victron/Node-RED: type the GX's IP into the board's web page.
+#     FJX4 (its advert doesn't show pairing mode): type the unit's name,
+#     SHE_xxxxxx, into "AC name to pair with" on the board's web page.
+#   - Victron/Node-RED: type the GX's IP (or venus.local) into the board's
+#     web page. Venus OS 3.x: security profile Unsecured (see the README).
 #   - Home Assistant: adopt the board in HA; HA sets the API key.
 #   - Factory reset: unplug and replug 5 times (each within 10 s), or hold
 #     BOOT for 10 s, or use the web page.
@@ -26,12 +29,12 @@ substitutions:
   ac_mac: "00:00:00:00:00:00"        # leave: the board pairs by itself
   encryption_key: !secret encryption_key
   ap_key: !secret ap_key
-  fjx7_ref: v0.5.0-rc.1              # keep in step with `ref:` below
+  fjx7_ref: v0.5.0-rc.2              # keep in step with `ref:` below
 
 packages:
   fjx7:
     url: https://github.com/prebsit/dometic-fjx7-ha
-    ref: v0.5.0-rc.1
+    ref: v0.5.0-rc.2
     files:
       - packages/core.yaml
       - packages/provisioning.yaml   # setup hotspot + captive portal

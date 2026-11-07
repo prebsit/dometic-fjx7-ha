@@ -31,7 +31,7 @@ esphome:
   # Bump with every release tag.
   project:
     name: prebsit.dometic-fjx7
-    version: "0.5.0-rc.1"
+    version: "0.5.0-rc.2"
 
 esp32:
   board: ${board}

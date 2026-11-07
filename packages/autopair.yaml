@@ -1,7 +1,8 @@
 # Dometic FJX/FJZ bridge — auto-pair package (v0.5)
 #
 # No AC address compiled in. The board pairs with whichever FreshJet is put
-# into pairing mode (hold + and - together on the panel for 3 s) and saves
+# into pairing mode (hold + and - together on the panel for 3 s), or with
+# the unit whose name is typed on the web page (webpage.yaml), and saves
 # its address to flash. Factory reset forgets it.
 #
 # Requires core.yaml, with ac_mac left at "00:00:00:00:00:00". Address 0
@@ -14,9 +15,16 @@
 # after + and - are held. A neighbour's unit in normal mode never matches,
 # so the board never even connects to it.
 #
+# The FJX4 doesn't do that (SHE_d13af0, 2026-11-03): its adverts carry one
+# 0x0845 entry (04 + base MAC) and look the same in pairing mode, so the
+# board can't spot it. Instead the owner types the unit's name on the web
+# page ("AC units nearby" lists what the board can hear), and the board
+# pairs with that unit and no other: still never a neighbour's.
+#
 # A candidate only gets saved once the AC is actually sending data (the
 # cabin temperature report arrives), which means the bond worked. If
-# nothing arrives within 60 s the candidate is dropped.
+# nothing arrives within 60 s the candidate is dropped. A typed name stays
+# set, so the board tries that unit again on its next advert.
 
 globals:
   # Saved AC address. 0 = not paired. Wiped by factory reset.
@@ -33,6 +41,21 @@ globals:
     type: uint32_t
     restore_value: false
     initial_value: "0"
+  # RAM only: a name typed on the web page, as its last 6 characters in
+  # lower case ("d13af0"). Empty = none.
+  - id: pair_target
+    type: std::string
+    restore_value: false
+    initial_value: '""'
+  # RAM only: the FreshJets heard in the last 30 s, for the web page.
+  - id: nearby_acs
+    type: std::string
+    restore_value: false
+    initial_value: '""'
+  - id: nearby_at
+    type: uint32_t
+    restore_value: false
+    initial_value: "0"
 
 esphome:
   on_boot:
@@ -44,16 +67,53 @@ esphome:
               id(fjx7_ble).set_address(id(ac_mac));
               ESP_LOGI("pair", "Paired AC: %012llX", (unsigned long long) id(ac_mac));
             } else {
-              ESP_LOGI("pair", "Not paired yet: hold + and - on the AC panel for 3 s");
+              ESP_LOGI("pair", "Not paired yet: hold + and - on the AC panel for 3 s, or type its name on the web page");
             }
 
 esp32_ble_tracker:
   on_ble_advertise:
     - then:
         - lambda: |-
-            if (id(ac_mac) != 0 || id(pair_candidate) != 0) return;
             auto name = x.get_name();
             if (name.size() < 4 || strncmp(name.c_str(), "SHE_", 4) != 0) return;
+            uint32_t now = millis();
+
+            // Every FreshJet heard, for the web page's "AC units nearby".
+            struct Unit { uint64_t addr; int rssi; uint32_t seen; char name[16]; };
+            static Unit units[4] = {};
+            Unit *u = nullptr;
+            for (auto &e : units) {
+              if (e.addr == x.address_uint64()) { u = &e; break; }
+            }
+            if (u == nullptr) {
+              // New unit: an empty slot, or the one heard longest ago.
+              u = &units[0];
+              for (auto &e : units) {
+                if (e.addr == 0) { u = &e; break; }
+                if (now - e.seen > now - u->seen) u = &e;
+              }
+              u->addr = x.address_uint64();
+              snprintf(u->name, sizeof(u->name), "%.*s", (int) name.size(), name.c_str());
+            }
+            u->rssi = x.get_rssi();
+            u->seen = now;
+            std::string list;
+            for (auto &e : units) {
+              if (e.addr == 0 || now - e.seen > 30000) continue;
+              // Words, not dBm: they change less often, so the page isn't
+              // redrawn on every advert.
+              const char *sig = e.rssi >= -70 ? "strong" : e.rssi >= -85 ? "OK" : "weak";
+              if (!list.empty()) list += ", ";
+              list += e.name;
+              list += " (";
+              list += sig;
+              list += " signal)";
+            }
+            id(nearby_acs) = list;
+            id(nearby_at) = now;
+
+            if (id(ac_mac) != 0 || id(pair_candidate) != 0) return;
+            // FJX7 / FJZ: pairing mode shows in the advert.
             int n = 0;
             bool pairing = false;
             for (auto &m : x.get_manufacturer_datas()) {
@@ -61,11 +121,21 @@ esp32_ble_tracker:
               n++;
               if (n == 2 && !m.data.empty() && m.data[0] == 0x01) pairing = true;
             }
-            if (!pairing) return;
+            // Any model: the name typed on the web page.
+            bool named = false;
+            const std::string &t = id(pair_target);
+            if (!t.empty() && name.size() >= 4 + t.size()) {
+              const char *tail = name.c_str() + name.size() - t.size();
+              named = true;
+              for (size_t i = 0; i < t.size(); i++) {
+                if (tolower((unsigned char) tail[i]) != t[i]) { named = false; break; }
+              }
+            }
+            if (!pairing && !named) return;
             id(pair_candidate) = x.address_uint64();
-            id(pair_started) = millis();
-            ESP_LOGI("pair", "%.*s is in pairing mode (rssi %d), connecting",
-                     (int) name.size(), name.c_str(), x.get_rssi());
+            id(pair_started) = now;
+            ESP_LOGI("pair", "%.*s %s (rssi %d), connecting", (int) name.size(), name.c_str(),
+                     pairing ? "is in pairing mode" : "matches the name set on the page", x.get_rssi());
             id(fjx7_ble).set_address(x.address_uint64());
 
 interval:
@@ -82,11 +152,13 @@ interval:
           if (id(cabin_temperature).has_state()) {
             id(ac_mac) = c;
             id(pair_candidate) = 0;
+            id(pair_target).clear();
             sync_in = 3;
             ESP_LOGI("pair", "Paired with %012llX and saved", (unsigned long long) c);
           } else if (millis() - id(pair_started) > 60000) {
-            ESP_LOGW("pair", "No data from %012llX within 60 s; hold + and - again",
-                     (unsigned long long) c);
+            ESP_LOGW("pair", "No data from %012llX within 60 s; %s", (unsigned long long) c,
+                     id(pair_target).empty() ? "hold + and - again"
+                                             : "trying again (hold + and - on the AC panel too)");
             id(pair_candidate) = 0;
             id(fjx7_ble).disconnect();
             id(fjx7_ble).set_address(0);

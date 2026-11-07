@@ -11,7 +11,13 @@
 #     MQTT broker IP   the Cerbo/Ekrano's IP (or any broker). Add :port for
 #                      a non-standard port. Blank = MQTT off.
 #     MQTT username / MQTT password   blank if the broker doesn't need them
-#   Pairing         which AC the board is paired with, or how to pair
+#   AC pairing
+#     Pairing          which AC the board is paired with, or how to pair
+#     AC units nearby  every FreshJet the board can hear (SHE_xxxxxx), with
+#                      a rough signal strength
+#     AC name to pair with   type one of those names to pair with it. For
+#                      units whose pairing mode the board can't see in the
+#                      advert (FJX4); works on any model. RAM only.
 #   Forget AC       unpair and restart, ready to pair with another unit
 #   Factory reset   wipe WiFi, AC pairing and MQTT settings; the board comes
 #                   back as its setup hotspot. Needs two presses within 10 s,
@@ -50,6 +56,9 @@ web_server:
   # 1 (Configuration) and 2 (Diagnostic); slot the Victron box in after
   # the controls.
   sorting_groups:
+    - id: grp_pairing
+      name: "AC pairing"
+      sorting_weight: 0.4
     - id: grp_victron
       name: "Victron / Node-RED (MQTT)"
       sorting_weight: 0.5
@@ -188,6 +197,40 @@ text:
     set_action:
       - script.execute: mqtt_restart
 
+  - platform: template
+    id: pair_name
+    name: "AC name to pair with"
+    icon: mdi:bluetooth-connect
+    mode: text
+    max_length: 16
+    # Not optimistic: set_action shows the cleaned-up name (or blanks the
+    # box) itself. RAM only, and emptied once paired.
+    entity_category: config
+    state_topic: null
+    web_server:
+      sorting_group_id: grp_pairing
+      sorting_weight: 3
+    set_action:
+      - lambda: |-
+          // Take "SHE_d13af0", "she d13af0", "D13AF0"...: keep the last 6
+          // hex digits (the E of SHE is a hex digit too, hence "last").
+          std::string hex;
+          for (char c : x) {
+            if (isxdigit((unsigned char) c)) hex += (char) tolower((unsigned char) c);
+          }
+          if (hex.size() > 6) hex = hex.substr(hex.size() - 6);
+          if (id(ac_mac) != 0) {
+            ESP_LOGW("pair", "Already paired: press Forget AC first");
+            hex.clear();
+          } else if (hex.size() != 6) {
+            if (!x.empty()) ESP_LOGW("pair", "AC name not understood: type it as SHE_ and 6 letters/numbers");
+            hex.clear();
+          }
+          id(pair_target) = hex;
+          if (!hex.empty()) ESP_LOGI("pair", "Looking for SHE_%s", hex.c_str());
+          std::string shown = hex.empty() ? std::string() : "SHE_" + hex;
+          id(pair_name).publish_state(shown);
+
 script:
   # Restart to apply MQTT settings. Waits 5 s (and starts the wait again on
   # every change) so filling in broker, username and password in one go
@@ -215,6 +258,19 @@ text_sensor:
     entity_category: diagnostic
     update_interval: never
     state_topic: null
+    web_server:
+      sorting_group_id: grp_pairing
+      sorting_weight: 1
+  - platform: template
+    id: nearby_list
+    name: "AC units nearby"
+    icon: mdi:access-point
+    entity_category: diagnostic
+    update_interval: never
+    state_topic: null
+    web_server:
+      sorting_group_id: grp_pairing
+      sorting_weight: 2
   - platform: template
     id: mqtt_status
     name: "MQTT connection"
@@ -227,14 +283,17 @@ text_sensor:
       sorting_weight: 4
 
 interval:
-  # Refresh the two status lines, publishing only when the text changes.
+  # Refresh the status lines, publishing only when the text changes.
   - interval: 2s
     then:
       - lambda: |-
           char buf[96];
           uint64_t a = id(ac_mac) ? id(ac_mac) : id(pair_candidate);
-          if (a == 0) {
-            snprintf(buf, sizeof(buf), "Not paired: hold + and - on the AC panel for 3 s");
+          if (a == 0 && !id(pair_target).empty()) {
+            snprintf(buf, sizeof(buf), "Looking for SHE_%s (hold + and - on the AC panel too)",
+                     id(pair_target).c_str());
+          } else if (a == 0) {
+            snprintf(buf, sizeof(buf), "Not paired: hold + and - on the AC panel for 3 s, or type its name below");
           } else {
             // The unit's name is SHE_ + the last 3 bytes of its base MAC,
             // which is the Bluetooth address minus 2.
@@ -245,6 +304,12 @@ interval:
             buf[0] = toupper(buf[0]);
           }
           if (id(pair_status).state != buf) id(pair_status).publish_state(buf);
+
+          std::string heard = id(nearby_acs);
+          if (heard.empty() || millis() - id(nearby_at) > 30000) heard = "None heard";
+          if (id(nearby_list).state != heard) id(nearby_list).publish_state(heard);
+          // Paired: empty the name box (autopair has already let go of it).
+          if (id(ac_mac) != 0 && !id(pair_name).state.empty()) id(pair_name).publish_state("");
 
           std::string host = id(mqtt_host).state;
           const char *s = host.empty() ? "Off (no broker set)"

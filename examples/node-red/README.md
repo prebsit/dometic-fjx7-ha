@@ -55,6 +55,12 @@ Confirmed on an Ekrano GX: Venus's broker carries the bridge's `dometic/...`
 topics fine. If on your GX the flow's "Bridge state" node shows *connected*
 but nothing arrives, go to option B.
 
+**Venus OS 3.x: security profile.** The GX's local network security profile
+(under Access control in its settings) must be **Unsecured**. On *Secured*,
+port 1883 doesn't answer the bridge at all; on *Weak*, the broker refuses the
+bridge's login. Both seen on a Cerbo GX. On *Unsecured*, leave the bridge's
+MQTT username and password blank.
+
 **Option B: a broker inside Node-RED.** Install `node-red-contrib-aedes` from
 the palette (needs internet), drop an *Aedes MQTT broker* node on port **1884**,
 change the flow's broker config to port 1884, and rebuild the bridge with

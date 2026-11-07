@@ -4,7 +4,7 @@ The first working integration for Dometic FreshJet roof air conditioners. An ESP
 
 **No cloud. No Dometic app. No wiring.**
 
-> **Current release: v0.5.0-rc.1** (release candidate). The "board in a box" firmware is being field-tested. If you want something that won't change under you, pin `ref: v0.2.0` (component only) or a later tag in your config instead of `main`.
+> **Current release: v0.5.0-rc.2** (release candidate). The "board in a box" firmware is being field-tested. If you want something that won't change under you, pin `ref: v0.2.0` (component only) or a later tag in your config instead of `main`.
 
 ## What You Get
 
@@ -36,12 +36,13 @@ About ten minutes, all from your phone. You need the board's **ID** (the last si
 3. **Open Safari / Chrome and go to `http://192.168.4.1`.** (Your phone may pop this page up by itself; if not, open it by hand.) Pick your van's WiFi, enter its password, save. The board joins your WiFi and the hotspot disappears.
    The board only ever joins **your van's private WiFi**. It has no login on its web page, so don't put it on a campsite network.
 4. **Pair it with the AC.** On the AC's control panel, hold **+ and −** together for 3 seconds until the display shows `BL`. The board finds the unit and pairs with it by itself, usually within a few seconds.
+   **FJX4:** the FJX4 doesn't announce pairing mode, so the board can't spot it by itself. Open the board's page (step 5), find your unit under **AC units nearby** (`SHE_xxxxxx`), type that name into **AC name to pair with** and press Enter, then hold + and − on the panel. The board pairs with that unit only, never a neighbour's. This works on any model.
 5. **Open its page:** `http://dometic-ac-<ID>.local` on any phone or laptop on the van WiFi. Tip: add it to your home screen. The **Pairing** line should say *Connected to SHE_xxxxxx*.
    Android phones don't always understand `.local` addresses. If the page won't open, find the board's IP address in your router's list of devices and use that instead.
 
 Then, depending on what else you run:
 
-- **Victron GX (Cerbo, Ekrano…):** type the GX's IP address into **MQTT broker IP** on the board's page and press Enter. The board restarts (about 10 s) and the **MQTT connection** line changes to *Connected*. Then set up the GX side: see [Victron GX](#victron-gx-via-node-red).
+- **Victron GX (Cerbo, Ekrano…):** type the GX's IP address (or `venus.local`) into **MQTT broker IP** on the board's page and press Enter. The board restarts (about 10 s) and the **MQTT connection** line changes to *Connected*. On **Venus OS 3.x** the GX's local network security profile (under Access control in its settings) must be **Unsecured**: on *Secured* the board can't reach the broker at all, and on *Weak* the broker turns its login away. Then set up the GX side: see [Victron GX](#victron-gx-via-node-red).
 - **Home Assistant:** it should find the board by itself (Settings → Devices & Services). Adopt it and HA sets its own encryption key.
 - **Neither:** the web page *is* your remote.
 - **iPhone:** add the **Aircon** shortcut for a one-tap remote (and Siri). See [iPhone shortcut](#iphone-shortcut).
@@ -65,7 +66,7 @@ Questions, problems or your own tweaks: see the [shortcut's discussion thread](h
 - Hold the board's **BOOT** button for 10 s while it's running (not while plugging it in).
 - On the web page, press **Factory reset** twice within 10 s.
 
-**Pairing with a different AC:** press **Forget AC** twice within 10 s on the web page, then hold + and − on the new unit.
+**Pairing with a different AC:** press **Forget AC** twice within 10 s on the web page, then hold + and − on the new unit (FJX4: type its name into **AC name to pair with**).
 
 **Known quirks (release candidate):**
 - After changing an MQTT setting the page doesn't always notice the board coming back. Reload it after 20 s.
@@ -88,7 +89,7 @@ The firmware is split into packages, so you only build what you use. Every examp
 | `mqtt.yaml` | MQTT, for Node-RED on a Victron GX or any broker |
 | `adaptive_power.yaml` | FJZ only: the Adaptive Power select |
 | `provisioning.yaml` | Setup hotspot + captive portal instead of compiled-in WiFi. Needs `ap_key` |
-| `autopair.yaml` | Pairs with whichever unit is put into pairing mode, instead of a compiled-in MAC |
+| `autopair.yaml` | Pairs with whichever unit is put into pairing mode, or the one whose name is typed on the web page, instead of a compiled-in MAC |
 | `webpage.yaml` | The control and setup web page (MQTT settings live here) |
 | `reset.yaml` | Factory reset by 5 power cycles or holding BOOT |
 
@@ -167,7 +168,7 @@ external_components:
   - source:
       type: git
       url: https://github.com/prebsit/dometic-fjx7-ha
-      ref: v0.5.0-rc.1  # pin a release tag so updates don't surprise you
+      ref: v0.5.0-rc.2  # pin a release tag so updates don't surprise you
     components: [dometic_fjx7]
 
 dometic_fjx7:
@@ -213,7 +214,7 @@ The ESP32 connects to the AC using Dometic's DDM (Device Data Model) protocol ov
 | Device | Protocol | Status |
 |--------|----------|--------|
 | FreshJet FJX7 | DDM over BLE | ✅ Fully working (Adaptive Power not supported) |
-| FreshJet FJX4 | DDM over BLE | ✅ Confirmed working (community-tested by Nige) |
+| FreshJet FJX4 | DDM over BLE | ✅ Confirmed working (community-tested by Nige; board-in-a-box field-tested, pairs by name) |
 | FreshJet FJZ7 2200 | DDM over BLE | ✅ Confirmed working incl. Adaptive Power (community-tested, [@DRAKS1000](https://github.com/DRAKS1000)) |
 | FreshJet FJX5 | DDM over BLE | 🔮 Likely compatible (untested) |
 | FreshJet FJX3 | DDM over BLE | 🔮 Likely compatible (untested) |
@@ -317,6 +318,8 @@ The FJX7 **requires encrypted BLE** (Just Works bonding). Without bonding, all w
 **Pairing says "Not paired"**
 - Hold + and − on the AC panel for 3 s until it shows `BL`. Pairing mode lasts about a minute.
 - Close the Dometic app on every phone nearby: the AC only takes one connection.
+- FJX4: holding + and − isn't enough on its own, because the FJX4 doesn't show pairing mode in its Bluetooth advert. Type its name into **AC name to pair with** (step 4 of [Setting up](#setting-up-a-board-in-a-box)).
+- **AC units nearby** says *None heard*: the board can't hear the AC. Move it closer to the roof unit, and check no phone has the Dometic app open.
 - Board-in-a-box: if it still won't pair, press Forget AC twice on the page and try again.
 
 **Connects then disconnects in a loop** (own config)
@@ -326,6 +329,7 @@ The FJX7 **requires encrypted BLE** (Just Works bonding). Without bonding, all w
 
 **MQTT connection says "Not connected"**
 - Check the IP in **MQTT broker IP**. On a Victron GX, MQTT must be on (Settings → Services → MQTT (plaintext)).
+- Venus OS 3.x: the security profile must be **Unsecured**, with **MQTT username** and **MQTT password** left blank. The board's log shows which wall it's hitting: `select() timeout` means the port is shut (*Secured*); `Connection refused error: 0x5` means the broker refused the login (*Weak*).
 
 **Home Assistant offers "Reconfigure" instead of "Add"**
 - HA remembers an older setup of a board with the same name (after a re-flash or a factory reset). Reconfiguring switches the connection to unencrypted. Delete the old device in HA first, then add the board fresh: HA then sets a new encryption key on it.
@@ -349,7 +353,11 @@ PRs welcome. If you have another Dometic connected product (FJX5, FJX3, anything
 
 ## Changelog
 
-### Unreleased
+### v0.5.0-rc.2 — FJX4 pairing
+- **Pair by name** for units whose advert doesn't show pairing mode. The FJX4 sends one 0x0845 entry (`04` + base MAC) and it doesn't change when + and − are held, so rc.1's auto-pair never fired on it. The web page now lists the units the board can hear under **AC units nearby**; type one into **AC name to pair with** and the board pairs with that unit only. Works on any model; FJX7/FJZ still pair with + and − as before
+- **Web page:** pairing status, nearby units and the name box grouped under **AC pairing**
+- **Docs:** Venus OS 3.x needs the GX's security profile on *Unsecured* for the board's MQTT
+- Field-tested on an FJX4: pairing by name, the web page, the iPhone shortcut, and MQTT to a Cerbo GX (Venus OS 3.x)
 - **iPhone shortcut** ([`shortcuts/build_aircon.py`](shortcuts/build_aircon.py), [iCloud link](https://www.icloud.com/shortcuts/bc17475521644550973b51cc794ed488)): one-button control of the AC and lights from an iPhone on the van WiFi, with Siri. No firmware change: works with any board on v0.5.0-rc.1 or later
 
 ### v0.5.0-rc.1 — board in a box (release candidate)
