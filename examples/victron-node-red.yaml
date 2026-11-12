@@ -6,12 +6,16 @@
 # secrets.yaml next to this file needs:
 #   wifi_ssid, wifi_password
 #   encryption_key   (generate with: openssl rand -base64 32)
+#
+# ac_mac is the AC's Bluetooth MAC (AA:BB:CC:DD:EE:FF), NOT its SHE_xxxxxx
+# name, and an iPhone can't show it. See "Finding the AC's address" in the
+# README, or build board-in-a-box.yaml instead and pair by name.
 
 substitutions:
   name: dometic-ac
   friendly_name: "Dometic AC Bridge"
   board: esp32-s3-devkitm-1
-  ac_mac: "XX:XX:XX:XX:XX:XX"
+  ac_mac: "XX:XX:XX:XX:XX:XX"        # Bluetooth MAC, not the SHE_ name
   encryption_key: !secret encryption_key
   mqtt_broker: 192.168.1.10          # your broker (e.g. the GX device's IP)
   # mqtt_username: ""

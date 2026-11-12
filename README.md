@@ -76,10 +76,12 @@ Questions, problems or your own tweaks: see the [shortcut's discussion thread](h
 
 The firmware is split into packages, so you only build what you use. Every example pins a release tag; bump `ref:` and `fjx7_ref:` together when you update.
 
+> **Don't know your AC's Bluetooth MAC, or only have an iPhone?** Build `board-in-a-box.yaml` and pair by name: no MAC needed. The other two examples need the AC's MAC; see [Finding the AC's address](#finding-the-acs-address).
+
 | Example | What it builds |
 |---|---|
-| [`examples/home-assistant.yaml`](examples/home-assistant.yaml) | Home Assistant only. WiFi and the AC's address set in your config |
-| [`examples/victron-node-red.yaml`](examples/victron-node-red.yaml) | MQTT for Victron / Node-RED (add `ha.yaml` for both) |
+| [`examples/home-assistant.yaml`](examples/home-assistant.yaml) | Home Assistant only. WiFi and the AC's Bluetooth MAC set in your config |
+| [`examples/victron-node-red.yaml`](examples/victron-node-red.yaml) | MQTT for Victron / Node-RED (add `ha.yaml` for both). AC's Bluetooth MAC set in your config |
 | [`examples/board-in-a-box.yaml`](examples/board-in-a-box.yaml) | Board-in-a-box: nothing about the van compiled in; set up from a phone (setup hotspot, auto-pair, web page, HA, MQTT, factory reset) |
 
 | Package | Does |
@@ -100,6 +102,16 @@ AP_KEY=<your ap_key> python3 tools/ap_card.py <board MAC>
 ```
 
 It prints the SSID, the password and the `WIFI:` string for a QR code. **Never publish firmware built with your `ap_key`**: anyone holding it and a board's MAC can work out that board's hotspot password.
+
+### Finding the AC's address
+
+`home-assistant.yaml`, `victron-node-red.yaml` and your own configs need the AC's Bluetooth MAC in `ac_mac`, written `AA:BB:CC:DD:EE:FF`. **The `SHE_xxxxxx` name is not the address.** Put the name in and ESPHome stops with `MAC Address must consist of 6 : (colon) separated parts`.
+
+- **From the ESP32:** flash with any address first (e.g. `00:00:00:00:00:00`) and watch the log for `Name: 'SHE_…'` and the address logged with it.
+- **Android:** a BLE scanner (nRF Connect) shows the address next to the `SHE_` name.
+- **iPhone:** no app can show it. iOS hides Bluetooth addresses and gives apps a random ID instead. Use the ESP32's log, or build `board-in-a-box.yaml` and pair by name.
+
+The name is the last three bytes of the unit's base MAC, and the Bluetooth address is the base MAC plus 2: `SHE_36bd48` is `…:36:BD:4A`. Handy for checking you've got the right unit.
 
 ### Hardware
 
@@ -161,7 +173,7 @@ captive_portal:
 esp32_ble_tracker:
 
 ble_client:
-  - mac_address: "XX:XX:XX:XX:XX:XX"  # your AC's address, see below
+  - mac_address: "XX:XX:XX:XX:XX:XX"  # AC's Bluetooth MAC, not the SHE_ name: see below
     id: fjx7_ble
 
 external_components:
@@ -199,7 +211,7 @@ sensor:
 #     name: "Adaptive Power"
 ```
 
-**Finding the AC's address.** The unit advertises as `SHE_xxxxxx`. Flash with any address first and watch the log for `Name: 'SHE_…'`, or use a phone BLE scanner (nRF Connect). The Bluetooth address is the unit's base MAC plus 2: `SHE_36bd48` is `…:36:BD:4A`.
+**Finding the AC's address.** `mac_address` is the AC's Bluetooth MAC, not its `SHE_xxxxxx` name: see [Finding the AC's address](#finding-the-acs-address).
 
 **Pairing (first time only).** The AC only accepts a new bond in pairing mode: hold **+ and −** on the panel for 3 s until it shows `BL`, then restart the ESP32. The log should show `Connected — requesting encryption` then `All parameters subscribed`. The bond survives power cycles and updates. If you skip this, the log loops `Connected` / `Disconnected`.
 
@@ -308,6 +320,9 @@ The FJX7 **requires encrypted BLE** (Just Works bonding). Without bonding, all w
 
 ## Troubleshooting
 
+**`MAC Address must consist of 6 : (colon) separated parts`**
+- `ac_mac` has the AC's name (`SHE_xxxxxx`) in it. It needs the Bluetooth MAC: see [Finding the AC's address](#finding-the-acs-address). Or build `board-in-a-box.yaml` and pair by name.
+
 **Can't see the setup hotspot**
 - Unplug the board for 5 seconds and plug it back in. If your phone has "forgotten" the network, iPhones sometimes hide it until the board restarts.
 - The hotspot only exists before setup or after a factory reset. Once the board has joined your WiFi it never falls back to the hotspot, even if the router is off.
@@ -352,6 +367,9 @@ The FJX7 **requires encrypted BLE** (Just Works bonding). Without bonding, all w
 PRs welcome. If you have another Dometic connected product (FJX5, FJX3, anything using DDM), your testing would help: the protocol layer is shared across the range. FJZ owners: a BLE scan of your unit's advert (nRF Connect, the manufacturer data under company 0x0845) would help the board tell FJX and FJZ apart.
 
 ## Changelog
+
+### Unreleased
+- **Docs:** `ac_mac` is the AC's Bluetooth MAC, not its `SHE_` name. Example and `core.yaml` comments fixed, [Finding the AC's address](#finding-the-acs-address) moved into Building your own (with the iPhone catch), pair-by-name pointed out up front, and a troubleshooting entry for the `MAC Address must consist of 6 : (colon) separated parts` error ([#16](https://github.com/prebsit/dometic-fjx7-ha/issues/16))
 
 ### v0.5.0-rc.2 — FJX4 pairing
 - **Pair by name** for units whose advert doesn't show pairing mode. The FJX4 sends one 0x0845 entry (`04` + base MAC) and it doesn't change when + and − are held, so rc.1's auto-pair never fired on it. The web page now lists the units the board can hear under **AC units nearby**; type one into **AC name to pair with** and the board pairs with that unit only. Works on any model; FJX7/FJZ still pair with + and − as before
