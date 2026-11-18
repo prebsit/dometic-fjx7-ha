@@ -11,6 +11,12 @@
 # built with: then it can be updated over WiFi, and its hotspot password stays
 # the one on its card.
 #
+# For a blank test board, make your own. ap_key must be 32 characters or more,
+# or the build stops at a static_assert in provisioning.yaml:
+#
+#   encryption_key: openssl rand -base64 32
+#   ap_key:         openssl rand -hex 16
+#
 #   esphome run examples/ice9-page.yaml
 
 substitutions:

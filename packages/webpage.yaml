@@ -52,6 +52,12 @@ web_server:
   local: true
   # The page's live log would show the WiFi password during setup.
   log: false
+  # No firmware upload over plain HTTP. Without this, POST /update takes an
+  # image from anyone on the same WiFi, with no key, which makes the
+  # encrypted OTA in core.yaml pointless. ESPHome still accepts /update while
+  # the setup hotspot's captive portal is up (web_server/ota/ota_web_server.cpp,
+  # canHandle); that needs the hotspot password from the board's card.
+  ota: false
   # The page's built-in groups have weights 0 (Sensor and Control),
   # 1 (Configuration) and 2 (Diagnostic); slot the Victron box in after
   # the controls.
