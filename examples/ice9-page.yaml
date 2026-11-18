@@ -1,0 +1,48 @@
+# TEST BUILD (branch ice9-page): the "board in a box" firmware with the Ice9
+# page in place of ESPHome's stock web interface. Everything else is
+# board-in-a-box.yaml: same setup hotspot, pairing, Home Assistant, MQTT,
+# factory reset.
+#
+# Unlike board-in-a-box.yaml this builds from THIS checkout (the packages and
+# the page are read from disk), so run it from a clone of the ice9-page branch.
+#
+# secrets.yaml next to this file needs the same two secrets as
+# board-in-a-box.yaml, encryption_key and ap_key. Use the ones the board was
+# built with: then it can be updated over WiFi, and its hotspot password stays
+# the one on its card.
+#
+#   esphome run examples/ice9-page.yaml
+
+substitutions:
+  name: dometic-ac
+  friendly_name: "Dometic AC Bridge"
+  board: esp32-s3-devkitm-1          # ESP32-S3 SuperMini / DevKitM
+  ac_mac: "00:00:00:00:00:00"        # leave: the board pairs by itself
+  encryption_key: !secret encryption_key
+  ap_key: !secret ap_key
+  fjx7_ref: v0.5.0-rc.2              # the AC component itself is unchanged on this branch
+
+packages:
+  core: !include ../packages/core.yaml
+  provisioning: !include ../packages/provisioning.yaml   # setup hotspot + captive portal
+  autopair: !include ../packages/autopair.yaml           # pair via + and - on the AC panel
+  ha: !include ../packages/ha.yaml                       # Home Assistant
+  mqtt: !include ../packages/mqtt.yaml                   # Victron / Node-RED (off until set on the page)
+  webpage: !include ../packages/webpage.yaml             # the settings behind the page
+  reset: !include ../packages/reset.yaml                 # 5 power cycles / BOOT 10 s factory reset
+
+# Let Home Assistant adopt the board and set its own API key, instead of
+# baking one in that the owner would have to be told.
+api:
+  encryption:
+    key: !remove
+
+# Swap the page. With `local: false` ESPHome serves a bare shell that loads
+# only /0.css and /0.js (web_server/__init__.py, build_index_html); the empty
+# js_url stops it also fetching the stock interface from oi.esphome.io.
+# The paths are relative to this file.
+web_server:
+  local: false
+  js_url: ""
+  css_include: ../page/ice9.css
+  js_include: ../page/ice9.js
