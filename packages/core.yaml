@@ -67,6 +67,10 @@ dometic_fjx7:
 climate:
   - platform: dometic_fjx7
     id: ac
+    # DO NOT RENAME (and don't use `name: None`). Everything addresses this
+    # entity by its name: the MQTT topics are .../climate/ac/..., which is all
+    # the Node-RED flows match; the Ice9 page and the iPhone shortcut call
+    # /climate/AC/set on the board's web server, which matches on entity name.
     name: "AC"
 
 light:
