@@ -32,12 +32,12 @@ The first working integration for Dometic FreshJet roof air conditioners. An ESP
 About ten minutes, all from your phone. You need the board's **ID** (the last six characters of its MAC, e.g. `f1de94`) and its **setup password**; `tools/ap_card.py` prints both, plus a WiFi QR code, when you flash it (see [Building your own](#building-your-own)).
 
 1. **Plug the board in** near the AC (any 5 V USB supply).
-2. **Join its setup hotspot.** Scan the QR code, or join the WiFi network `dometic-ac-<ID>` with the setup password.
+2. **Join its setup hotspot.** Scan the QR code, or join the WiFi network `ice9-<ID>` with the setup password. (Boards made before the rename are `dometic-ac-<ID>`, here and in step 5.)
 3. **Open Safari / Chrome and go to `http://192.168.4.1`.** (Your phone may pop this page up by itself; if not, open it by hand.) Pick your van's WiFi, enter its password, save. The board joins your WiFi and the hotspot disappears.
    The board only ever joins **your van's private WiFi**. It has no login on its web page, so don't put it on a campsite network.
 4. **Pair it with the AC.** On the AC's control panel, hold **+ and −** together for 3 seconds until the display shows `BL`. The board finds the unit and pairs with it by itself, usually within a few seconds.
    **FJX4:** the FJX4 doesn't announce pairing mode, so the board can't spot it by itself. Open the board's page (step 5), find your unit under **AC units nearby** (`SHE_xxxxxx`), type that name into **AC name to pair with** and press Enter, then hold + and − on the panel. The board pairs with that unit only, never a neighbour's. This works on any model.
-5. **Open its page:** `http://dometic-ac-<ID>.local` on any phone or laptop on the van WiFi. Tip: add it to your home screen. The **Pairing** line should say *Connected to SHE_xxxxxx*.
+5. **Open its page:** `http://ice9-<ID>.local` on any phone or laptop on the van WiFi. Tip: add it to your home screen. The **Pairing** line should say *Connected to SHE_xxxxxx*.
    Android phones don't always understand `.local` addresses. If the page won't open, find the board's IP address in your router's list of devices and use that instead.
 
 Then, depending on what else you run:
@@ -54,10 +54,10 @@ One button that shows what the AC is doing ("AC COOL · set 21° · cabin 24° �
 It talks straight to the board over the van WiFi: no GX, no app, no cloud. That also means it only works when your phone is on the van WiFi. For control from anywhere you need a GX (Cerbo, Ekrano) and VRM; see [Victron GX](#victron-gx-via-node-red).
 
 1. Open **[Aircon shortcut](https://www.icloud.com/shortcuts/bc17475521644550973b51cc794ed488)** on your iPhone and tap **Add Shortcut**.
-2. In the Shortcuts app, open **Aircon** (tap ⋯ on it). The first box says `dometic-ac-xxxxxx.local`. Change it to your board's address from step 5 above, e.g. `dometic-ac-f1de94.local`, or the board's IP address.
+2. In the Shortcuts app, open **Aircon** (tap ⋯ on it). The first box says `ice9-xxxxxx.local`. Change it to your board's address from step 5 above, e.g. `ice9-f1de94.local`, or the board's IP address.
 3. Tap it to run. That's it.
 
-The shortcut is built by [`shortcuts/build_aircon.py`](shortcuts/build_aircon.py), so you can read exactly what it sends. To build your own copy: `python3 shortcuts/build_aircon.py --host dometic-ac-<ID>.local`, then sign it on a Mac with `shortcuts sign -m anyone -i Aircon.shortcut -o signed/Aircon.shortcut` (iPhones only import signed shortcuts).
+The shortcut is built by [`shortcuts/build_aircon.py`](shortcuts/build_aircon.py), so you can read exactly what it sends. To build your own copy: `python3 shortcuts/build_aircon.py --host ice9-<ID>.local`, then sign it on a Mac with `shortcuts sign -m anyone -i Aircon.shortcut -o signed/Aircon.shortcut` (iPhones only import signed shortcuts).
 
 Questions, problems or your own tweaks: see the [shortcut's discussion thread](https://github.com/prebsit/dometic-fjx7-ha/discussions/14).
 

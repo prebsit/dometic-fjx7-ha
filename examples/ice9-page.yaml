@@ -20,8 +20,14 @@
 #   esphome run examples/ice9-page.yaml
 
 substitutions:
-  name: dometic-ac
-  friendly_name: "Dometic AC Bridge"
+  # The box is ice9-<ID>: setup hotspot, .local address and the name the
+  # router shows (provisioning.yaml adds the ID, the last 6 hex digits of the
+  # MAC). Boxes made before this change are dometic-ac-<ID>: to update one of
+  # those and keep its name, set `name: dometic-ac` here.
+  name: ice9
+  # What Home Assistant calls the device and its entities, e.g.
+  # "Dometic Aircon 4398e0 AC". ESPHome adds the ID to this too.
+  friendly_name: "Dometic Aircon"
   board: esp32-s3-devkitm-1          # ESP32-S3 SuperMini / DevKitM
   ac_mac: "00:00:00:00:00:00"        # leave: the board pairs by itself
   encryption_key: !secret encryption_key

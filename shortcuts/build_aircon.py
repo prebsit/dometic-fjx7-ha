@@ -3,7 +3,7 @@
 
 Usage:
     python3 shortcuts/build_aircon.py                                # placeholder address
-    python3 shortcuts/build_aircon.py --host dometic-ac-43960c.local # one board's address
+    python3 shortcuts/build_aircon.py --host ice9-43960c.local # one board's address
     shortcuts sign -m anyone -i Aircon.shortcut -o signed/Aircon.shortcut   # on a Mac
 
 iOS only imports signed shortcuts, and signing needs a Mac signed in to iCloud
@@ -30,7 +30,7 @@ import os
 import plistlib
 import uuid
 
-PLACEHOLDER = "dometic-ac-xxxxxx.local"
+PLACEHOLDER = "ice9-xxxxxx.local"
 OBJ = "￼"  # Shortcuts' placeholder character for an inline variable
 DV = "Dictionary Value"
 CONTENT = "Contents of URL"
