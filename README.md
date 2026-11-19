@@ -1,6 +1,6 @@
 # Dometic FreshJet FJX / FJZ — ESPHome Bridge for Home Assistant, Victron and your phone
 
-The first working integration for Dometic FreshJet roof air conditioners. An ESP32 talks to the unit over Bluetooth and puts it on your van's WiFi: in **Home Assistant**, on a **Victron GX** screen (Cerbo, Ekrano) via Node-RED, or on a plain **web page** on your phone. Confirmed on the FJX7, FJX4 and FJZ7.
+A working integration for Dometic FreshJet FJX and FJZ roof air conditioners. An ESP32 talks to the unit over Bluetooth and puts it on your van's WiFi: in **Home Assistant**, on a **Victron GX** screen (Cerbo, Ekrano) via Node-RED, or on a plain **web page** on your phone. Confirmed on the FJX7, FJX4 and FJZ7.
 
 **No cloud. No Dometic app. No wiring.**
 
@@ -17,7 +17,7 @@ The first working integration for Dometic FreshJet roof air conditioners. An ESP
 - **Auto-reconnect** — recovers from power cycles and the AC being switched off at the isolator
 - **Four ways in** — Home Assistant (ESPHome API), MQTT (Victron GX via Node-RED, or any broker), the board's own web page, and an iPhone shortcut. Use any or all of them.
 
-**Don't fancy building your own?** The ready-made version is called **Ice9**: no soldering, no flashing, just plug it in and set it up from your phone. See [prebs.wtf/ice9](https://prebs.wtf/ice9/).
+**Don't fancy building your own?** The ready-made version is called **Ice9**: no soldering, no flashing, just plug it in and set it up from your phone. See [ice9.cool](https://ice9.cool).
 
 ## Pick your route
 
