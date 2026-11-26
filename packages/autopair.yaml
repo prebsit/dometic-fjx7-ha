@@ -15,7 +15,7 @@
 # after + and - are held. A neighbour's unit in normal mode never matches,
 # so the board never even connects to it.
 #
-# The FJX4 doesn't do that (SHE_d13af0, 2026-11-03): its adverts carry one
+# The FJX4 doesn't do that (SHE_a1b2c3, 2026-11-03): its adverts carry one
 # 0x0845 entry (04 + base MAC) and look the same in pairing mode, so the
 # board can't spot it. Instead the owner types the unit's name on the web
 # page ("AC units nearby" lists what the board can hear), and the board
@@ -42,7 +42,7 @@ globals:
     restore_value: false
     initial_value: "0"
   # RAM only: a name typed on the web page, as its last 6 characters in
-  # lower case ("d13af0"). Empty = none.
+  # lower case ("a1b2c3"). Empty = none.
   - id: pair_target
     type: std::string
     restore_value: false

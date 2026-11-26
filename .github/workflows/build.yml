@@ -51,7 +51,7 @@ jobs:
       fail-fast: false
       matrix:
         esphome: ["latest", "dev"]
-        config: ["packages-all", "packages-mqtt-only", "packages-box"]
+        config: ["packages-all", "packages-mqtt-only", "packages-box", "packages-box-page"]
     continue-on-error: ${{ matrix.esphome == 'dev' }}
     steps:
       - uses: actions/checkout@v7
@@ -69,5 +69,12 @@ jobs:
         with:
           path: ~/.platformio
           key: pio-pkg-${{ matrix.esphome }}-${{ hashFiles('tests/*.yaml', 'packages/*.yaml') }}
+      # core.yaml (and webpage.yaml's lock_source default) fetch from the public repository at
+      # ${fjx7_ref}. In a private mirror or a fork the commit under test isn't there ("not our
+      # ref"), so have git fetch from the repository this run is in. On the public repository
+      # that is the same place as before.
+      - name: Fetch the component from this repository
+        run: |
+          git config --global url."https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}".insteadOf "https://github.com/prebsit/dometic-fjx7-ha"
       - name: Compile
         run: esphome -s fjx7_ref ${{ github.event.pull_request.head.sha || github.sha }} compile tests/${{ matrix.config }}.yaml

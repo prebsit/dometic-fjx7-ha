@@ -1,0 +1,30 @@
+# CI build: the "board in a box" firmware with the Ice9 page (page/ice9.css and
+# page/ice9.js) in place of ESPHome's stock web interface. Everything else is
+# packages-box.yaml. fjx7_ref is overridden on the command line.
+substitutions:
+  lock_source: ../components       # ice9_lock from this checkout
+  name: ci-box-page
+  ac_mac: "00:00:00:00:00:00"
+  # Public CI-only keys. NEVER use on a device.
+  encryption_key: "hh099O86RNsj3RKMWZo4y8f9JOWwltp3Z7lXl6NqnwM="
+  ap_key: "00000000000000000000000000000000"
+
+packages:
+  core: !include ../packages/core.yaml
+  provisioning: !include ../packages/provisioning.yaml
+  ha: !include ../packages/ha.yaml
+  mqtt: !include ../packages/mqtt.yaml
+  autopair: !include ../packages/autopair.yaml
+  webpage: !include ../packages/webpage.yaml
+  reset: !include ../packages/reset.yaml
+  adaptive_power: !include ../packages/adaptive_power.yaml   # every box carries the FJZ's power limit
+
+# Swap the page. With `local: false` ESPHome serves a bare shell that loads
+# only /0.css and /0.js (web_server/__init__.py, build_index_html); the empty
+# js_url stops it also fetching the stock interface from oi.esphome.io.
+# The paths are relative to THIS file, so the swap can't live in a package.
+web_server:
+  local: false
+  js_url: ""
+  css_include: ../page/ice9.css
+  js_include: ../page/ice9.js

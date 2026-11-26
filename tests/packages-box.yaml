@@ -2,6 +2,7 @@
 # captive-portal WiFi, auto-pair, web page, HA and MQTT (MQTT off until a
 # broker is set on the page). fjx7_ref is overridden on the command line.
 substitutions:
+  lock_source: ../components       # ice9_lock from this checkout
   name: ci-box
   ac_mac: "00:00:00:00:00:00"
   # Public CI-only keys. NEVER use on a device.
@@ -16,3 +17,4 @@ packages:
   autopair: !include ../packages/autopair.yaml
   webpage: !include ../packages/webpage.yaml
   reset: !include ../packages/reset.yaml
+  adaptive_power: !include ../packages/adaptive_power.yaml   # every box carries the FJZ's power limit

@@ -55,11 +55,19 @@ Confirmed on an Ekrano GX: Venus's broker carries the bridge's `dometic/...`
 topics fine. If on your GX the flow's "Bridge state" node shows *connected*
 but nothing arrives, go to option B.
 
-**Venus OS 3.x: security profile.** The GX's local network security profile
-(under Access control in its settings) must be **Unsecured**. On *Secured*,
-port 1883 doesn't answer the bridge at all; on *Weak*, the broker refuses the
-bridge's login. Both seen on a Cerbo GX. On *Unsecured*, leave the bridge's
-MQTT username and password blank.
+**Venus OS 3.x: security profile.** What the bridge needs depends on the GX's
+local network security profile (under Access control in its settings):
+
+- **Unsecured:** leave the bridge's MQTT username and password blank.
+- **Weak:** give the bridge any username and the GX's own password (on an ice9:
+  Settings, Victron GX or Node-RED; in your own config: `mqtt_username` and
+  `mqtt_password`). Proven on an Ekrano GX, Venus OS 3.85. The GX goes on
+  refusing a client ID that once connected with no login, so a box firmware
+  with a login uses an ID of its own (`packages/webpage.yaml`); in your own
+  config, a board that connected before the login was set may need a new
+  `client_id`.
+- **Secured:** not supported. Port 1883 doesn't answer at all: the GX only
+  takes encrypted MQTT.
 
 **Option B: a broker inside Node-RED.** Install `node-red-contrib-aedes` from
 the palette (needs internet), drop an *Aedes MQTT broker* node on port **1884**,

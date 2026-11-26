@@ -2,17 +2,24 @@
 #
 # Flash once, then set everything up from a phone. Nothing about the van is
 # compiled in:
-#   - WiFi: the board starts a setup hotspot, <name>-xxxxxx, with its own
+#   - WiFi: the board starts a setup hotspot, ice9-xxxxxx, with its own
 #     password derived from ap_key and the board's MAC (tools/ap_card.py
 #     prints it). Join it, open http://192.168.4.1, pick the van WiFi.
 #   - AC: hold + and - on the AC panel for 3 s; the board pairs with that unit.
 #     FJX4 (its advert doesn't show pairing mode): type the unit's name,
 #     SHE_xxxxxx, into "AC name to pair with" on the board's web page.
 #   - Victron/Node-RED: type the GX's IP (or venus.local) into the board's
-#     web page. Venus OS 3.x: security profile Unsecured (see the README).
+#     web page. Venus OS 3.x: on the Unsecured profile leave the MQTT username
+#     and password blank; on Weak give any username and the GX's password;
+#     Secured is not supported (see the README).
 #   - Home Assistant: adopt the board in HA; HA sets the API key.
 #   - Factory reset: unplug and replug 5 times (each within 10 s), or hold
 #     BOOT for 10 s, or use the web page.
+#
+# This build has ESPHome's own plain page. examples/ice9-page.yaml is the same
+# firmware with the ice9 page (built from a clone of this repository). The page
+# password, the update rules and the kept log (GET /ice9/log) are in both: see
+# packages/webpage.yaml.
 #
 # secrets.yaml next to this file needs:
 #   encryption_key   OTA key (openssl rand -base64 32). Keep it: you need it
@@ -23,18 +30,23 @@
 #                    password. The build refuses to run without one.
 
 substitutions:
-  name: dometic-ac
-  friendly_name: "Dometic AC Bridge"
+  # The box is ice9-<ID>: setup hotspot, .local address and the name the
+  # router shows (provisioning.yaml adds the ID, the last 6 hex digits of the
+  # MAC: the box's serial).
+  name: ice9
+  # What Home Assistant calls the device and its entities, e.g.
+  # "Dometic Aircon abcdef AC". ESPHome adds the ID to this too.
+  friendly_name: "Dometic Aircon"
   board: esp32-s3-devkitm-1          # ESP32-S3 SuperMini / DevKitM
   ac_mac: "00:00:00:00:00:00"        # leave: the board pairs by itself
   encryption_key: !secret encryption_key
   ap_key: !secret ap_key
-  fjx7_ref: v0.5.0-rc.2              # keep in step with `ref:` below
+  fjx7_ref: v1.0.0-rc.1              # keep in step with `ref:` below
 
 packages:
   fjx7:
     url: https://github.com/prebsit/dometic-fjx7-ha
-    ref: v0.5.0-rc.2
+    ref: v1.0.0-rc.1
     files:
       - packages/core.yaml
       - packages/provisioning.yaml   # setup hotspot + captive portal
@@ -43,7 +55,7 @@ packages:
       - packages/mqtt.yaml           # Victron / Node-RED (off until set on the page)
       - packages/webpage.yaml        # control and setup page
       - packages/reset.yaml          # 5 power cycles / BOOT 10 s factory reset
-      # - packages/adaptive_power.yaml   # FJZ only
+      # - packages/adaptive_power.yaml   # the FJZ's power limit. On ESPHome's page an FJX shows an empty dropdown
     refresh: 1d
 
 # Let Home Assistant adopt the board and set its own API key, instead of

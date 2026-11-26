@@ -10,7 +10,8 @@
 #   Victron / Node-RED (MQTT)
 #     MQTT broker IP   the Cerbo/Ekrano's IP (or any broker). Add :port for
 #                      a non-standard port. Blank = MQTT off.
-#     MQTT username / MQTT password   blank if the broker doesn't need them
+#     MQTT username / MQTT password   blank if the broker doesn't need them.
+#                      Changing the broker clears the saved password.
 #   AC pairing
 #     Pairing          which AC the board is paired with, or how to pair
 #     AC units nearby  every FreshJet the board can hear (SHE_xxxxxx), with
@@ -23,7 +24,16 @@
 #                   back as its setup hotspot. Needs two presses within 10 s,
 #                   because the page has no "are you sure?" box.
 #
-# No login on the page: the board is only ever on the van's private WiFi.
+# Page password (components/ice9_lock): off until the owner sets one (on the
+# ice9 page, Settings; or POST /ice9/password). Then the page, its REST calls
+# and its live events all ask for it; any user name will do. A factory reset
+# removes it, which is the way back in if it's forgotten. MQTT and Home
+# Assistant don't go through the web server and aren't affected.
+#
+# Firmware upload (POST /update): needs the page password or hands on the box.
+# With a password set: any time, for someone who has given it. With none set:
+# for 10 minutes after the box is plugged in, and 403 the rest of the time.
+# The setup hotspot is always open: getting on needs the card.
 #
 # DO NOT RENAME the three MQTT text entities once boards have shipped: the
 # saved value is keyed on the entity's name, so a rename silently blanks
@@ -44,6 +54,39 @@ substitutions:
   mqtt_broker: "unset.invalid"
   # The fan dropdown replaces the Fan Speed % reading on this build.
   fan_speed_internal: "true"
+  # Where the ice9's own components (the page password, components/ice9_lock,
+  # and the kept log, components/ice9_log) come from: this repository at the
+  # same ref as the AC component. Building from a clone, set
+  # it to the clone's components folder instead (an absolute path, or one
+  # relative to YOUR config file).
+  lock_source: github://prebsit/dometic-fjx7-ha@${fjx7_ref}
+
+external_components:
+  - source: ${lock_source}
+    components: [ice9_lock, ice9_log]
+
+# The page password: off until the owner sets one (see the top of this file).
+# The same component puts the ice9 page's own setup screen on the setup hotspot, in place of
+# ESPHome's, when the build has a page of its own (web_server js_include, as the ice9 page is
+# added) and provisioning.yaml. ESPHome's setup page is then still at
+# http://192.168.4.1/ice9/plain-setup, for support. See SetupScreen in page_lock.cpp.
+ice9_lock:
+
+# The kept log (components/ice9_log): what the box did and who asked (the page,
+# the Shortcut, MQTT, Home Assistant, or nobody here: the aircon's own panel,
+# remote or app), Wi-Fi, MQTT and the aircon's Bluetooth link coming and going,
+# and how the box started. GET /ice9/log since the last start, GET /ice9/log/all
+# about a week kept in flash; behind the page password. The page and the
+# Shortcut say who they are with a request header, X-Ice9-From: page/shortcut.
+ice9_log:
+
+# The log's clock. The box has no clock that survives a power cut: the time comes
+# from the internet over the van's WiFi, in the zone of the computer that builds
+# the firmware (ESPHome's default). With no internet the log's lines carry the
+# time since the box started instead.
+time:
+  - platform: sntp
+    id: ice9_clock
 
 web_server:
   version: 3
@@ -52,6 +95,12 @@ web_server:
   local: true
   # The page's live log would show the WiFi password during setup.
   log: false
+  # Firmware upload over the page (POST /update) is ESPHome's web_server OTA,
+  # left on. What makes that safe is components/ice9_lock: its gate is asked
+  # first and refuses an upload unless the page password was given or the box
+  # has just been plugged in.
+  # Never take ice9_lock out of this package without also setting `ota: false`
+  # here: the upload would then be open to anyone on the WiFi.
   # The page's built-in groups have weights 0 (Sensor and Control),
   # 1 (Configuration) and 2 (Diagnostic); slot the Victron box in after
   # the controls.
@@ -92,9 +141,32 @@ esphome:
             auto *m = mqtt::global_mqtt_client;
             m->set_broker_address(host);
             m->set_broker_port(port);
-            m->set_username(id(mqtt_user).state);
+            const std::string user = id(mqtt_user).state;
+            m->set_username(user);
             m->set_password(id(mqtt_pass).state);
-            ESP_LOGI("mqtt_cfg", "Broker %s:%u", host.c_str(), port);
+            // With a login, a client ID of its own. A Victron GX on Weak or Secured (Venus OS 3.85,
+            // FlashMQ) ties a client ID that once connected without a login to that session, and
+            // refuses the same ID with a login: "not authorised", with the right password, clean
+            // session or not (found on F451, 24 Nov 2026). So the ID gets a short hash of the user
+            // name on the end. A box's name already ends in its ID, the last 6 of the MAC
+            // (provisioning.yaml), so that is unique as it stands: ice9-abcdef-1a2b. A name without
+            // the ID gets the whole MAC added first. The front is cut to keep within MQTT's 23
+            // characters. Without a login nothing changes: ESPHome's own ID, as before.
+            if (!user.empty()) {
+              std::string cid(App.get_name().c_str());
+              const std::string mac = get_mac_address();   // 12 hex digits, lower case
+              const bool has_id = cid.size() >= 6 && mac.size() == 12 && cid.compare(cid.size() - 6, 6, mac, 6, 6) == 0;
+              if (!has_id) cid += "-" + mac;
+              char tag[6];
+              snprintf(tag, sizeof(tag), "-%04x", (unsigned) (fnv1_hash(user) & 0xFFFF));
+              if (cid.size() + 5 > 23)
+                cid.erase(0, cid.size() + 5 - 23);
+              cid += tag;
+              m->set_client_id(cid);
+              ESP_LOGI("mqtt_cfg", "Broker %s:%u as %s", host.c_str(), port, cid.c_str());
+            } else {
+              ESP_LOGI("mqtt_cfg", "Broker %s:%u", host.c_str(), port);
+            }
             m->enable();
 
 # Order the controls: AC, its fan, then the lights. (The two sensors come
@@ -165,6 +237,23 @@ text:
       sorting_group_id: grp_victron
       sorting_weight: 1
     set_action:
+      # A saved password belongs to the broker it was typed for. Without this,
+      # anyone who can reach the page could point the box at a broker of their
+      # own and be handed the saved user name and password when it logs in.
+      # So a new address clears the password: it has to be typed again (after
+      # the address: the ice9 page sends them in that order).
+      - lambda: |-
+          auto trim = [](std::string v) {
+            v.erase(0, v.find_first_not_of(' '));
+            v.erase(v.find_last_not_of(' ') + 1);
+            return v;
+          };
+          if (trim(x) != trim(id(mqtt_host).state) && !id(mqtt_pass).state.empty()) {
+            ESP_LOGW("mqtt_cfg", "Broker address changed: the saved password is cleared, type it again");
+            auto call = id(mqtt_pass).make_call();
+            call.set_value("");
+            call.perform();
+          }
       - script.execute: mqtt_restart
   - platform: template
     id: mqtt_user
@@ -212,7 +301,7 @@ text:
       sorting_weight: 3
     set_action:
       - lambda: |-
-          // Take "SHE_d13af0", "she d13af0", "D13AF0"...: keep the last 6
+          // Take "SHE_a1b2c3", "she a1b2c3", "A1B2C3"...: keep the last 6
           // hex digits (the E of SHE is a hex digit too, hence "last").
           std::string hex;
           for (char c : x) {
@@ -281,6 +370,22 @@ text_sensor:
     web_server:
       sorting_group_id: grp_victron
       sorting_weight: 4
+
+binary_sensor:
+  # Whether an MQTT password is saved. The password itself is never sent to the
+  # page (ESPHome sends the same ******** whether one is saved or not), so this
+  # is how the page knows to show that one is there. DO NOT RENAME once boxes
+  # have shipped (the page reads it by name).
+  - platform: template
+    id: mqtt_pass_saved
+    name: "MQTT password saved"
+    icon: mdi:key-check
+    entity_category: diagnostic
+    state_topic: null
+    web_server:
+      sorting_group_id: grp_victron
+      sorting_weight: 5
+    lambda: return !id(mqtt_pass).state.empty();
 
 interval:
   # Refresh the status lines, publishing only when the text changes.

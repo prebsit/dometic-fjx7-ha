@@ -9,7 +9,16 @@
 # Optional substitutions (defaults below):
 #   mqtt_port, mqtt_username, mqtt_password, mqtt_topic_prefix
 #
-# Topics (with the default prefix dometic/<name>):
+# Topics (with the default prefix dometic/<name>). <name> is the `name`
+# substitution as written, WITHOUT the -xxxxxx ID that provisioning.yaml adds
+# to the hostname: an explicit topic_prefix is used as it stands
+# (mqtt_client.cpp, set_topic_prefix). So a box named ice9 publishes under
+# dometic/ice9, and one named dometic-ac under dometic/dometic-ac. The
+# Node-RED flows subscribe to dometic/# and learn the prefix from the status
+# topic, so they work with either. Anything of your own that hard-codes
+# dometic/dometic-ac/... needs the new prefix, or pin the old one with
+# mqtt_topic_prefix.
+#
 #   dometic/<name>/status                          online / offline
 #   dometic/<name>/climate/ac/...                  climate state + commands
 #   dometic/<name>/sensor/temperature/state        cabin temperature
